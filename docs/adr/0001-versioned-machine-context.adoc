@@ -1,0 +1,44 @@
+= ADR 0001: Versioned machine context
+
+Date:: 2026-09-10
+Status:: Accepted
+
+== Context
+
+The prototype creates operator views from a declared machine model. Asset identity,
+tag ownership, units, source references, and relationships must remain inspectable when
+the model changes. A revision number alone cannot establish that two models describe the
+same machine.
+
+== Decision
+
+The native engine validates bounded JSON models before interpretation or telemetry. Tasks
+carry the model identity and revision. Views retain task data, tag dependencies, source
+references, and deterministic dependency fingerprints. Reconciliation compares those
+fingerprints and relationship snapshots. A removed binding becomes unavailable. A same-ID
+owner, role, data type, unit, source, or relationship meaning change becomes a conflict;
+the engine preserves the prior component and does not infer a replacement relationship.
+Fresh task resolution may include newly declared relationships.
+
+The HTTP server publishes each resolved view with a server-generated `view_id`, one
+process-local `session_id`, and the active `context_generation`. It keeps at most 64
+canonical views in memory. Reconciliation accepts a trusted cached view by ID, rejects a
+full view that differs from that cache, and updates the canonical entry after a successful
+reconciliation. Session, view, and binding state are not persistent.
+
+The initial interpreter is explicitly labelled `rules` and supports filling, overview, and
+alarms. Unit text is retained as declared metadata and compared on reconciliation; this
+prototype does not claim dimensional conversion or physical unit ontology validation.
+Telemetry is deterministic simulation data bounded by tag type and does not issue physical
+equipment commands.
+
+== Consequences
+
+Operators can inspect why a component is present and can see when a model edit requires
+review. Revisions can add declared equipment to a newly requested view while an existing
+view retains evidence of removed or conflicting bindings. Model validation adds a small,
+explicit boundary around IDs, references, source fields, cardinality, and alarm operators.
+The rule interpreter has predictable coverage and returns clarification for unsupported or
+ambiguous prompts. The simulator is repeatable for tests, but it is not a process model or
+a control system. No physical OPC UA endpoint, Schneider runtime, or production
+authentication is covered by this decision.

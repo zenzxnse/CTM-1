@@ -1,0 +1,188 @@
+{
+  "model_id": "pump-station",
+  "revision": 1,
+  "name": "Pump station",
+  "assets": [
+    {
+      "id": "tank-3",
+      "name": "Tank 3",
+      "kind": "tank",
+      "aliases": [
+        "third tank"
+      ]
+    },
+    {
+      "id": "tank-4",
+      "name": "Tank 4",
+      "kind": "tank",
+      "aliases": [
+        "fourth tank"
+      ]
+    },
+    {
+      "id": "pump-1",
+      "name": "Pump 1",
+      "kind": "pump",
+      "aliases": [
+        "first pump"
+      ]
+    },
+    {
+      "id": "pump-2",
+      "name": "Pump 2",
+      "kind": "pump",
+      "aliases": [
+        "second pump"
+      ]
+    },
+    {
+      "id": "valve-1",
+      "name": "Inlet valve",
+      "kind": "valve",
+      "aliases": [
+        "inlet"
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "id": "feed-1",
+      "from": "pump-1",
+      "to": "tank-3",
+      "kind": "feeds"
+    },
+    {
+      "id": "feed-2",
+      "from": "pump-2",
+      "to": "tank-4",
+      "kind": "feeds"
+    },
+    {
+      "id": "pump-1-valve-1",
+      "from": "pump-1",
+      "to": "valve-1",
+      "kind": "connected-to"
+    },
+    {
+      "id": "pump-2-valve-1",
+      "from": "pump-2",
+      "to": "valve-1",
+      "kind": "connected-to"
+    }
+  ],
+  "tags": [
+    {
+      "id": "tank-3.level",
+      "asset_id": "tank-3",
+      "name": "Level",
+      "role": "level",
+      "data_type": "number",
+      "unit": "%",
+      "source": {
+        "server": "simulator",
+        "namespace_uri": "urn:context-hmi:simulator",
+        "identifier": "Tank3.Level"
+      }
+    },
+    {
+      "id": "tank-4.level",
+      "asset_id": "tank-4",
+      "name": "Level",
+      "role": "level",
+      "data_type": "number",
+      "unit": "%",
+      "source": {
+        "server": "simulator",
+        "namespace_uri": "urn:context-hmi:simulator",
+        "identifier": "Tank4.Level"
+      }
+    },
+    {
+      "id": "pump-1.flow",
+      "asset_id": "pump-1",
+      "name": "Flow",
+      "role": "flow",
+      "data_type": "number",
+      "unit": "L/s",
+      "source": {
+        "server": "simulator",
+        "namespace_uri": "urn:context-hmi:simulator",
+        "identifier": "Pump1.Flow"
+      }
+    },
+    {
+      "id": "pump-1.state",
+      "asset_id": "pump-1",
+      "name": "Operating state",
+      "role": "operating_state",
+      "data_type": "boolean",
+      "unit": "",
+      "source": {
+        "server": "simulator",
+        "namespace_uri": "urn:context-hmi:simulator",
+        "identifier": "Pump1.Running"
+      }
+    },
+    {
+      "id": "pump-2.flow",
+      "asset_id": "pump-2",
+      "name": "Flow",
+      "role": "flow",
+      "data_type": "number",
+      "unit": "L/s",
+      "source": {
+        "server": "simulator",
+        "namespace_uri": "urn:context-hmi:simulator",
+        "identifier": "Pump2.Flow"
+      }
+    },
+    {
+      "id": "pump-2.state",
+      "asset_id": "pump-2",
+      "name": "Operating state",
+      "role": "operating_state",
+      "data_type": "boolean",
+      "unit": "",
+      "source": {
+        "server": "simulator",
+        "namespace_uri": "urn:context-hmi:simulator",
+        "identifier": "Pump2.Running"
+      }
+    },
+    {
+      "id": "valve-1.state",
+      "asset_id": "valve-1",
+      "name": "Valve state",
+      "role": "state",
+      "data_type": "boolean",
+      "unit": "",
+      "source": {
+        "server": "simulator",
+        "namespace_uri": "urn:context-hmi:simulator",
+        "identifier": "Valve1.Open"
+      }
+    }
+  ],
+  "alarms": [
+    {
+      "id": "tank-3.high-level",
+      "asset_id": "tank-3",
+      "name": "High level",
+      "tag_id": "tank-3.level",
+      "operator": ">=",
+      "threshold": 90,
+      "severity": "high"
+    },
+    {
+      "id": "tank-4.high-level",
+      "asset_id": "tank-4",
+      "name": "High level",
+      "tag_id": "tank-4.level",
+      "operator": ">=",
+      "threshold": 90,
+      "severity": "high"
+    }
+  ],
+  "scenario_name": "Original model copy",
+  "description": "The same configuration, useful for returning to the original model."
+}

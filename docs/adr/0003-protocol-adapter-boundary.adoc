@@ -1,0 +1,100 @@
+= ADR 0003: Protocol adapter boundary
+
+Date:: 2026-09-10
+
+Status:: Proposed
+
+== Context
+
+The link:../implementation-contract.adoc[implementation contract] requires
+explicit asset ownership, stable source references, revision-aware views, and
+no physical equipment commands. Coupling a vendor client to the core would make native tests depend on
+that client's lifecycle and configuration. An adapter boundary keeps the simulator and future
+real source under the same model and reconciliation rules.
+
+open62541 documents asynchronous subscriptions and a client API without an
+internal worker thread in its
+https://open62541.org/doc/master/client.html[client documentation]. Its
+https://open62541.org/doc/master/types.html[data type documentation]
+documents namespace URI to index mapping. Both are suitable for a future
+adapter design, but neither constitutes a test against the target PLC or HMI.
+
+== Decision
+
+Keep external protocol clients outside `context_hmi_core`. A protocol adapter
+translates a declared model source into the core's value and quality records;
+the core continues to own model validation, task interpretation, view
+resolution, and reconciliation.
+
+The first candidate is an optional C++ wrapper around the C API in released
+https://github.com/open62541/open62541/releases/tag/v1.5.8[open62541 v1.5.8].
+It should include the matching
+https://github.com/open62541/open62541/blob/v1.5.8/include/open62541/client.h[`open62541/client.h`]
+and
+https://github.com/open62541/open62541/blob/v1.5.8/include/open62541/client_highlevel.h[`open62541/client_highlevel.h`]
+headers and provide a narrow shape such as:
+
+[source,cpp]
+----
+class ProtocolAdapter {
+public:
+  virtual ~ProtocolAdapter() = default;
+  virtual ModelSnapshot read_declared_sources(const Model& model) = 0;
+  virtual SubscriptionHandle subscribe_declared_sources(
+      const Model& model, ValueCallback callback) = 0;
+};
+
+class Open62541Adapter final : public ProtocolAdapter {
+  // Owns UA_Client, session lifecycle, namespace URI to index resolution,
+  // browse/read/monitor callbacks, and conversion to declared tag records.
+};
+----
+
+The concrete adapter should:
+
+. connect with `UA_Client_connect` and call `UA_Client_run_iterate` from its
+  owned event loop at a bounded cadence;
+. resolve each model `namespace_uri` with
+  `UA_Client_getNamespaceIndex` after connect and construct the `UA_NodeId`
+  with the declared identifier type and value;
+. browse only when an explicit discovery operation is requested, using
+  `UA_Client_browse` and `UA_Client_browseNext`; browsing must not create model
+  ownership or relationships;
+. read declared values with `UA_Client_readValueAttribute` for a snapshot, or
+  create one subscription with `UA_Client_Subscriptions_create` and value
+  monitored items with `UA_Client_MonitoredItems_createDataChange`;
+. translate callbacks by an explicit `tag_id` context and retain `asset_id`,
+  role, unit, and source metadata in every emitted record;
+. report status, timestamps, namespace resolution failures, and server
+  disconnects as data quality or adapter issues; never silently select a
+  same-name node;
+. expose read and subscription operations only in PS2. No physical write,
+  method-call, or PLC command route is added by this ADR.
+
+The simulator remains the default implementation. The existing loopback
+llama.cpp provider remains an interpretation provider and is not a protocol
+adapter. EcoStruxure Operator Terminal Expert and Machine SCADA Expert remain
+future integration targets because the public Schneider pages checked do not
+establish a versioned external import, extension, or runtime API.
+
+== Consequences
+
+* The first integration slice can be tested with a fake `ProtocolAdapter` and
+  the existing simulator without changing core semantics.
+* Namespace indices are treated as connection-local values, preventing a
+  reconnect or different server from changing a tag's meaning silently.
+* Adapter lifecycle, network errors, and callback threading need explicit
+  ownership and bounded queues before a real device is enabled.
+* A Schneider integration cannot be planned as a guessed file import or
+  undocumented runtime call. The exact product, version, target runtime, and
+  licensed SDK must be identified first.
+* The native service retains the prototype boundary: loopback HTTP, simulation,
+  read-only external integration, and no production authentication claim.
+
+== Verification status
+
+This ADR is based on documentation and local source inspection on 2026-09-10.
+No open62541 headers or binaries were added, no live OPC UA endpoint was
+available, no llama.cpp server was available for an interoperability check,
+and no Schneider Windows runtime or SDK was installed. Those checks belong to
+the adapter implementation slice.

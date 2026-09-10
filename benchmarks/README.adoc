@@ -1,0 +1,68 @@
+= Native rule benchmark
+
+This is a dated smoke baseline for the PS2 core. It measures the complete
+rule-based `interpret_request` plus `resolve_task` path and `reconcile_view`
+separately. Model indexing is included because each core call validates and
+indexes its model internally. GUI rendering, llama.cpp inference, PLC or OPC
+UA I/O, and network latency are excluded. The output is not a product or
+cross-machine performance comparison.
+
+== Build and run
+
+Run from the `context-hmi` directory after building the target:
+
+[source,shell]
+----
+cmake --preset release
+cmake --build --preset release --parallel 2
+./build/release/context-hmi-benchmark
+----
+
+Defaults are seven trials, 100 iterations per trial, and batch size one. The
+native program writes one indented JSON document to stdout and diagnostics to
+stderr. Each metric reports p50, p95, minimum, maximum, mean, and sample count
+in milliseconds. It preserves every timing sample and each trial's statistics.
+The overall p50 pools all samples; it is not a percentile of trial medians.
+For batch sizes above one, each sample is elapsed batch time divided by batch size,
+not an individually timed operation. The JSON records UTC date, OS, architecture, compiler and
+C++ standard information, CPU availability, configuration, model workload
+counts, and excluded timing categories.
+
+The workload uses `examples/pump-station.json` and
+`examples/model-revision-added-feed.json`. Setup derives the base task by
+calling `interpret_request` with `Show filling view for Tank 3`, then resolves
+the base view. Setup is outside the timed samples. The timed reconcile case
+uses that base view against the revision model. Each sample starts from the same
+original view; it does not accumulate reconciliation history. There is no explicit
+warm-up or process restart between trials. The two metrics run sequentially.
+
+== Python wrapper
+
+The Python 3.11 wrapper uses only the standard library. It invokes the native
+binary, validates that stdout is one dated JSON document, and writes that raw
+stdout unchanged when `--save` is supplied:
+
+[source,shell]
+----
+python3 benchmarks/run.py --binary build/release/context-hmi-benchmark \
+  --save benchmarks/baseline-2026-09-10.json
+----
+
+Use `--human` only after a real native run to append a compact `RESULTS`
+summary. The JSON remains the machine-readable output:
+
+[source,shell]
+----
+python3 benchmarks/run.py --binary build/release/context-hmi-benchmark \
+  --trials 7 --iterations 100 --batch-size 1 --human
+----
+
+The wrapper defaults to `build/debug/context-hmi-benchmark` and runs with the
+repository root as its working directory. Use `--binary` to select another
+build output. The native program caps runs at one million samples and ten million
+operations. Record the code revision and build command alongside intentional baselines.
+
+This baseline excludes process memory, browser allocations, inference model memory,
+multi-client throughput and screen paint time. Those require separate measurements
+on the selected target hardware. CPU affinity records eligible CPUs, not guaranteed
+CPU time or exclusive access to the host.

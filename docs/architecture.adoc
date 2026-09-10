@@ -1,0 +1,108 @@
+= Architecture
+
+This document describes the local prototype. Planned boundaries are identified explicitly.
+
+== Responsibility and ownership
+
+The C++ core validates machine models and interprets the supported task vocabulary.
+It has no HTTP, UI, filesystem persistence or global mutable machine state.
+The service owns the active model, simulator tick and bounded saved-view records.
+The workbench owns visible page state and a component catalog. It never resolves PLC addresses.
+
+The llama.cpp adapter is an interpretation provider. It proposes a task and equipment
+scope. The engine resolves concrete bindings from declared context. A correct schema
+does not establish that the model understood the operator's intent.
+
+== Request path
+
+. The service reads a bounded JSON request and validates its shape.
+. It captures the active model and its configuration generation.
+. The selected interpreter proposes a supported task or asks for clarification.
+. The resolver checks the task against the model and follows declared relationships.
+. The service retains the resulting view and its binding evidence in memory.
+. It returns the JSON screen description to the workbench.
+. The workbench commits the new view after a successful response. Failed or ambiguous
+  requests leave the previous view visible with an explicit message.
+
+The filling task selects the anchor level, directly declared feeds and their measurements,
+plus scoped alarms. These task rules are authored in the engine. The system does not
+infer arbitrary process topology or discover task requirements from an undocumented plant.
+Overview and alarm tasks use their own explicit scope rules.
+
+Readings carry the tag ID, owner, role, unit and binding explanation. Reusable components
+are predefined; complete machine-specific views are assembled from the current model.
+The first renderer uses a responsive grid. It does not invent a P&ID layout.
+
+== Configuration path
+
+Scenario selection loads and validates a local model file before replacing the active model.
+The request becomes visible after the validated model is committed under the service lock.
+There is no durable write. Invalid input leaves the previous model active.
+
+Model identity and revision are distinct. Reusing revision 1 in another model does not
+establish continuity. An additional service generation distinguishes transitions through
+different configurations that happen to reuse the same model ID and revision.
+
+Reconciliation reevaluates the saved task and compares the new model with the retained
+binding records. Added declared feeds can add components. Removed data remains unavailable.
+Changed ownership, measurement role, type, unit, source or connection meaning produces
+an issue. Conflict evidence must survive repeated reconciliation. A new explicit request
+can compose a fresh view against the new model.
+
+The service owns the saved evidence. Browser-supplied binding records are not authority.
+Clients reconcile by view ID. Memory-only view records have a bounded retention policy;
+a missing or evicted view requires a fresh request.
+
+This prototype changes scenarios manually. It does not implement OPC UA model-change
+subscriptions or source rescans. There is no claim of an atomic snapshot of an external PLC.
+
+== Telemetry path
+
+The simulator advances a logical tick independently of inference. The service maps the
+tick and current model to deterministic values and alarm states. SSE sends current-value
+snapshots to the browser. It is not a durable alarm-event log or historical trend service.
+
+The client accepts readings only when model identity, revision, service session and
+configuration generation match its view and
+the feed is current. Per-component conflicts also block rendering that reading. A lost
+connection, delayed heartbeat or paused simulator produces unavailable values.
+The simulator's timestamps are logical simulation times, not measured PLC source times.
+
+This synthetic source emits periodic snapshots. A future exception-based OPC UA source
+needs a different freshness rule: an unchanged value or old source timestamp alone does
+not prove staleness. Quality and connection health must be part of that adapter's contract.
+
+== Concurrency and resource limits
+
+The service copies a model snapshot under a short lock and releases it before inference.
+The inference request does not own the model lock or the telemetry loop. The HTTP thread
+pool, inference concurrency, current-value streams, request sizes and saved-view count
+are bounded. See link:api.adoc[the API contract] for the implemented values.
+
+The core starts with full validation and recomputation. It does not claim an incremental
+query engine. Model cardinality limits are input guards, not a total process-memory cap.
+Renderer allocations, connection buffers, thread stacks and model inference use separate memory.
+
+One browser thread owns all component state. Network callbacks update that state; the
+client does not call a native UI API from acquisition threads.
+
+== Failure and restart
+
+Invalid JSON, unknown IDs, unsupported tasks and source metadata errors produce structured
+errors or review states. An unavailable AI provider does not silently become rules mode.
+Existing views may continue receiving independent telemetry while inference is unavailable.
+
+Backend loss makes client values unavailable. Restart discards saved view records and
+simulator state. Reconnect must obtain the current model and make a fresh request before
+trusting a new session. There is no physical command authority to restore.
+
+== Replaceable boundaries
+
+* Source acquisition: simulator now, an open62541 OPC UA adapter later.
+* Interpretation: bounded rules and optional llama.cpp HTTP provider.
+* Rendering: SvelteKit catalog now; a separate LVGL client can consume the screen contract.
+* Engineering input: reviewed JSON now; vendor export adapters require documented formats.
+* Persistence: none now. Any durable model/view store needs a new ADR with recovery rules.
+
+Library availability does not prove compatibility with an installed Schneider runtime.
+The exact EcoStruxure product and release remain necessary for that integration.

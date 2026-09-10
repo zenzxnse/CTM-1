@@ -1,0 +1,19 @@
+= Third-party dependencies
+
+The native build uses vendored release headers so configuring CMake does not need
+network access. Original licenses are retained beside the headers.
+
+[cols="1,1,2,1",options="header"]
+|===
+|Dependency |Version |Upstream |License
+|nlohmann JSON |3.12.0 |https://github.com/nlohmann/json/tree/v3.12.0[nlohmann/json] |MIT
+|cpp-httplib |0.28.0 |https://github.com/yhirose/cpp-httplib/tree/v0.28.0[yhirose/cpp-httplib] |MIT
+|===
+
+The workbench records exact package versions and transitive integrity hashes in
+`workbench/package-lock.json`. Svelte, SvelteKit and their tools retain their upstream
+licenses. GSAP retains its own upstream license; the project's MIT license does not
+relicense dependencies. Node modules are not included in source control.
+
+The `manifest.json` file records downloaded header hashes and source URLs.
+Updating a dependency requires updating its license, manifest and verification evidence.

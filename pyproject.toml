@@ -1,0 +1,17 @@
+[project]
+name = "context-hmi-tools"
+version = "0.1.0"
+description = "Verification and benchmark tools for the native Context HMI prototype"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+include = ["tests/*.py", "benchmarks/*.py", "tools/*.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pyright]
+typeCheckingMode = "standard"
+include = ["tools", "benchmarks", "tests"]

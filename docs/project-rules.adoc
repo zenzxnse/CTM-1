@@ -1,0 +1,54 @@
+= Project rules
+
+These are the user's general conventions applied to the C++ prototype and its workbench.
+
+== Language and documentation
+
+Use direct English and sentence-case headings. Do not use em dashes, promotional claims
+or unmeasured performance claims. Describe implemented, tested and planned behavior separately.
+Human-written documentation uses AsciiDoc. Keep the README compact and put deeper
+architecture, contracts and important decisions under `docs/`.
+
+ADRs use sequential four-digit filenames and the Context, Decision and Consequences
+structure. Add a new ADR when an accepted decision changes. Do not rewrite its history.
+
+== Source organization
+
+Keep native application code under `src/context_hmi/`. Keep workbench source under
+`workbench/src/`, tests under `tests/`, fixtures under `examples/`, and measurements under
+`benchmarks/`. Separate parsing, validation, interpretation, resolution, service ownership
+and rendering. Source comments explain contracts and invariants, not the following line.
+
+Use C++20 and CMake. Keep public entry points small and resource lifetimes explicit.
+Use structured results and domain errors. Input validation precedes state replacement.
+Python is limited to verification and benchmark tooling and follows `pyproject.toml`.
+The workbench uses SvelteKit, TypeScript and GSAP where motion helps.
+
+== Correctness and failure behavior
+
+Do not equate valid JSON with correct interpretation. Unknown data is not false.
+Do not invent ownership, machine connections, source addresses or replacement identities.
+Keep source references distinct from model asset IDs. Review a binding when its meaning
+changes. A generation provider never creates physical command authority.
+
+Keep mutable ownership explicit. Simulated state, current values and saved views are
+memory-only unless a future ADR defines persistence and recovery.
+
+== Verification and measurement
+
+Test public interfaces, expected failures, model changes and regression cases. Keep tests
+deterministic and use temporary files/processes for integration checks. Test the native
+API through the compiled executable. Mock provider tests must exercise the real provider
+client, not just reproduce response examples in Python.
+
+Preserve benchmark instructions, raw dated JSON and human-readable results. Record what
+is inside each timed interval. Label smoke baselines, and measure the real bottleneck
+before introducing incremental evaluation or special allocators.
+
+== Git and delivery
+
+Use short conventional commit subjects and preserve repository history in source archives.
+Keep generated builds, node modules, local model weights, caches and runtime state out of Git.
+Use the repository's configured author identity. A source snapshot is not a production release.
+Verify a clean extracted copy and installed executable before calling the delivered
+prototype reproducible. Verify Windows separately before claiming Windows support.

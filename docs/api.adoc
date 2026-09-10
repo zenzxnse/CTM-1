@@ -1,0 +1,114 @@
+= Context HMI local API
+
+Status:: Accepted for the PS2 prototype
+
+Date:: 2026-09-10
+
+The native service listens on `127.0.0.1:8080` by default. All routes use the
+`/api/v1` prefix and JSON. The service is simulation-only and has no PLC or
+physical equipment command route.
+
+== Runtime identity
+
+Each process creates one `session_id`. The active model starts at
+`context_generation: 0`; selecting a scenario increments that generation and
+resets the simulation tick. `/health`, `/model`, and `/telemetry` expose the
+session and generation. The service keeps canonical generated views in an
+in-memory cache of at most 64 entries. View and session state is lost when the
+process exits.
+
+== Read routes
+
+`GET /api/v1/health` returns service and simulation state:
+
+[source,json]
+----
+{
+  "version": "0.1.0",
+  "interpreter": "rules",
+  "llama_configured": false,
+  "mode": "simulation",
+  "active_scenario": "pump-station",
+  "session_id": "session-...",
+  "context_generation": 0,
+  "simulation_running": true
+}
+----
+
+`GET /api/v1/model` returns the active declared model, plus
+`session_id` and `context_generation` fields. `GET /api/v1/scenarios` returns
+valid files from the configured model directory. Each item contains `id`
+(the file stem), `model_id`, `revision`, `name`, and `description`.
+
+`GET /api/v1/telemetry` returns a current snapshot with `model_id`,
+`model_revision`, `tick`, `quality`, `values`, `alarms`, `session_id`, and
+`context_generation`. `GET /api/v1/events` streams the same current-value
+snapshot as `text/event-stream` events named `telemetry`. It is not a durable
+event log. At most three SSE clients are active at once.
+
+== Interpretation and views
+
+Mutation routes require a content type beginning with `application/json`.
+`POST /api/v1/interpret` accepts:
+
+[source,json]
+----
+{"prompt":"Show filling view for Tank 3", "interpreter":"rules"}
+----
+
+`interpreter` is optional and accepts `rules`, `llama`, or `llama.cpp` when a
+loopback llama.cpp URL was configured. Rule interpretation is deterministic.
+A ready response contains `status`, `interpreter`, and a task. A ready task
+contains `kind`, `model_id`, `model_revision`, `original_request`, and an
+optional `anchor_asset_id`. The server validates task identity against the
+snapshotted active model and adds a canonical `view`.
+
+An ambiguous, unsupported, or unknown request returns `status: clarification`
+with a message and optional candidates. Clarification does not create a view.
+
+`POST /api/v1/resolve` accepts `{"task":{...}}`. The task revision must match
+the active model revision; an optional task model ID must also match. The
+response is a canonical view with a server-generated `view_id`, `session_id`,
+and `context_generation`. The generated view retains the task, components,
+issues, dependencies, and dependency fingerprints.
+
+`POST /api/v1/reconcile` accepts either `{"view":{...}}` or
+`{"view_id":"..."}`. The server looks up the canonical view by ID. A full
+supplied view must exactly match the cached value. On success, the reconciled
+view preserves its `view_id`, updates the canonical cache entry, and includes
+the current session and generation.
+
+== Scenario and simulation mutations
+
+`POST /api/v1/scenario` accepts `{"id":"model-revision-added-feed"}`. The ID
+is validated and used as a file stem under the configured models directory.
+The new model is validated before activation. Activation resets `tick` and
+increments `context_generation`.
+
+`POST /api/v1/simulation` accepts `{"running":true}` or
+`{"running":false}`. This only pauses or resumes deterministic laboratory
+telemetry generation.
+
+== Errors and limits
+
+Errors use `{ "error": { "code": "...", "message": "..." } }` and never
+include stack traces or credentials. Mutation bodies are limited to 64 KiB;
+JSON nesting is limited to depth 32; model files are limited to 1 MiB. Prompt
+requests are limited to 8192 bytes at the HTTP boundary and by the native rule
+interpreter. The optional llama.cpp request timeout is
+configurable from 100 to 30000 ms and defaults to 5000 ms.
+
+Relevant status mappings include:
+
+* `400` for malformed JSON, content, prompt, task, scenario, or simulation data;
+* `403` for an unsupported mutation origin;
+* `404` when a scenario file cannot be selected;
+* `409` for `stale_context` or a reconciliation `lost_update`;
+* `413` for an oversized request body;
+* `415` when a mutation lacks an application/json content type;
+* `422` for engine validation, `unknown_view`, or `view_tampered` errors;
+* `429` when inference or SSE concurrency limits are reached;
+* `502` for configured provider errors.
+
+The server binds to loopback unless `--allow-remote` is supplied. That option
+changes the bind policy only. The prototype has no production authentication.

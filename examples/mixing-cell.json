@@ -1,0 +1,189 @@
+{
+  "model_id": "mixing-cell",
+  "revision": 1,
+  "name": "Mixing cell",
+  "assets": [
+    {
+      "id": "buffer-a",
+      "name": "Buffer A",
+      "kind": "tank",
+      "aliases": [
+        "buffer a",
+        "first vessel"
+      ]
+    },
+    {
+      "id": "blend-b",
+      "name": "Blend vessel B",
+      "kind": "tank",
+      "aliases": [
+        "blend b"
+      ]
+    },
+    {
+      "id": "supply-east",
+      "name": "East supply pump",
+      "kind": "pump",
+      "aliases": [
+        "east pump"
+      ]
+    },
+    {
+      "id": "return-west",
+      "name": "West return pump",
+      "kind": "pump",
+      "aliases": [
+        "west pump"
+      ]
+    },
+    {
+      "id": "isolation-east",
+      "name": "East isolation valve",
+      "kind": "valve",
+      "aliases": [
+        "east valve"
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "id": "cell-feed-1",
+      "from": "supply-east",
+      "to": "buffer-a",
+      "kind": "feeds"
+    },
+    {
+      "id": "cell-feed-2",
+      "from": "return-west",
+      "to": "blend-b",
+      "kind": "feeds"
+    },
+    {
+      "id": "cell-pump-1-valve-1",
+      "from": "supply-east",
+      "to": "isolation-east",
+      "kind": "connected-to"
+    },
+    {
+      "id": "cell-pump-2-valve-1",
+      "from": "return-west",
+      "to": "isolation-east",
+      "kind": "connected-to"
+    }
+  ],
+  "tags": [
+    {
+      "id": "buffer-a.level",
+      "asset_id": "buffer-a",
+      "name": "Level",
+      "role": "level",
+      "data_type": "number",
+      "unit": "%",
+      "source": {
+        "server": "simulator",
+        "namespace_uri": "urn:context-hmi:mixing-cell",
+        "identifier": "buffer-a.level"
+      }
+    },
+    {
+      "id": "blend-b.level",
+      "asset_id": "blend-b",
+      "name": "Level",
+      "role": "level",
+      "data_type": "number",
+      "unit": "%",
+      "source": {
+        "server": "simulator",
+        "namespace_uri": "urn:context-hmi:mixing-cell",
+        "identifier": "blend-b.level"
+      }
+    },
+    {
+      "id": "supply-east.flow",
+      "asset_id": "supply-east",
+      "name": "Flow",
+      "role": "flow",
+      "data_type": "number",
+      "unit": "L/s",
+      "source": {
+        "server": "simulator",
+        "namespace_uri": "urn:context-hmi:mixing-cell",
+        "identifier": "supply-east.flow"
+      }
+    },
+    {
+      "id": "supply-east.state",
+      "asset_id": "supply-east",
+      "name": "Operating state",
+      "role": "operating_state",
+      "data_type": "boolean",
+      "unit": "",
+      "source": {
+        "server": "simulator",
+        "namespace_uri": "urn:context-hmi:mixing-cell",
+        "identifier": "supply-east.state"
+      }
+    },
+    {
+      "id": "return-west.flow",
+      "asset_id": "return-west",
+      "name": "Flow",
+      "role": "flow",
+      "data_type": "number",
+      "unit": "L/s",
+      "source": {
+        "server": "simulator",
+        "namespace_uri": "urn:context-hmi:mixing-cell",
+        "identifier": "return-west.flow"
+      }
+    },
+    {
+      "id": "return-west.state",
+      "asset_id": "return-west",
+      "name": "Operating state",
+      "role": "operating_state",
+      "data_type": "boolean",
+      "unit": "",
+      "source": {
+        "server": "simulator",
+        "namespace_uri": "urn:context-hmi:mixing-cell",
+        "identifier": "return-west.state"
+      }
+    },
+    {
+      "id": "isolation-east.state",
+      "asset_id": "isolation-east",
+      "name": "Valve state",
+      "role": "state",
+      "data_type": "boolean",
+      "unit": "",
+      "source": {
+        "server": "simulator",
+        "namespace_uri": "urn:context-hmi:mixing-cell",
+        "identifier": "isolation-east.state"
+      }
+    }
+  ],
+  "alarms": [
+    {
+      "id": "buffer-a.high-level",
+      "asset_id": "buffer-a",
+      "name": "High level",
+      "tag_id": "buffer-a.level",
+      "operator": ">=",
+      "threshold": 90,
+      "severity": "high"
+    },
+    {
+      "id": "blend-b.high-level",
+      "asset_id": "blend-b",
+      "name": "High level",
+      "tag_id": "blend-b.level",
+      "operator": ">=",
+      "threshold": 90,
+      "severity": "high"
+    }
+  ],
+  "scenario_name": "Second machine: mixing cell",
+  "description": "An independent model with different equipment identities. Try: Show filling for Buffer A."
+}

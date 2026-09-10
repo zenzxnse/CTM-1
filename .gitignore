@@ -1,0 +1,14 @@
+/build/
+/dist/
+/workbench/node_modules/
+/workbench/.svelte-kit/
+/workbench/build/
+/workbench/.sites-runtime/
+/.venv/
+__pycache__/
+.ruff_cache/
+*.pyc
+/.runtime/
+/models/
+*.log
+/.env

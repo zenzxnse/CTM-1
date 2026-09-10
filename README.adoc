@@ -1,0 +1,94 @@
+= Context HMI
+
+Context HMI is a local PS2 prototype for composing task views from declared machine
+context. It is not a production HMI or a replacement for PLC protection logic.
+It exists to test whether task interpretation and model reconciliation can reduce
+manual screen configuration when equipment changes.
+
+== Main flow
+
+Machine JSON + operator request -> interpreter -> C++ context resolver -> JSON view
+-> SvelteKit component catalog. A separate simulator supplies telemetry over SSE.
+Configuration changes -> saved task and binding records -> reconciliation -> reviewed view.
+
+== Quick start
+
+Prerequisites: a C++20 compiler, CMake 3.25+, Ninja, Node.js 22.12+ and npm.
+Python 3.11+ runs the API tests and benchmark wrapper. Native headers are vendored.
+
+[source,shell]
+----
+npm --prefix workbench ci
+npm --prefix workbench run build
+cmake --preset debug
+cmake --build --preset debug --parallel 2
+./build/debug/context-hmi --web-dir workbench/build
+----
+
+Open http://127.0.0.1:8080[the local workbench]. The default mode uses explicit
+rules and simulated telemetry. Try `Show the filling view for Tank 3`, then select
+`Add a second feed` or `Move a flow tag owner` in the configuration selector.
+
+On Windows, run CMake from a developer shell with a C++ compiler available and use
+`build/debug/context-hmi.exe` for the executable. Windows execution remains unverified.
+
+== Implemented features
+
+* Bounded machine-model validation and declared equipment relationships.
+* Rule interpretation for filling, overview and alarm tasks, with clarification states.
+* JSON views with binding reasons and a fixed component catalog.
+* Reconciliation after configuration changes, including missing and changed bindings.
+* A local HTTP API, simulated telemetry stream and SvelteKit workbench.
+* An optional loopback llama.cpp provider with separate failure handling.
+
+The final verification record is in link:docs/verification.adoc[verification].
+
+== Scope and limitations
+
+The first implementation reads reviewed JSON models and simulates equipment. It does
+not browse a PLC, import a Schneider project, operate real equipment or render through
+LVGL. No local LLM weights are included. Provider contract tests use a mock HTTP server;
+they do not establish compatibility or interpretation quality for a particular model.
+
+Views, simulator state and the server's binding records are memory-only. Restart loads
+the selected model again. There is no durable alarm history, production authentication,
+plant authorization or general process diagnosis. The UI shows unavailable data explicitly.
+The source model's ownership, roles and relationships still require engineering review.
+
+The benchmark is a native smoke baseline. It is not a comparison with an existing HMI,
+an engineering-effort study, or a compact-panel memory result.
+
+== Documentation
+
+* link:docs/architecture.adoc[Architecture and failure behavior]
+* link:docs/api.adoc[HTTP API and local inference]
+* link:docs/api-investigation.adoc[OPC UA, llama.cpp and Schneider API investigation]
+* link:docs/demo.adoc[Demonstration and test cases]
+* link:docs/adr/[Architecture decisions]
+* link:benchmarks/README.adoc[Benchmark methodology]
+* link:benchmarks/RESULTS.adoc[Recorded smoke results]
+* link:third_party/README.adoc[Dependency versions and licenses]
+
+== Verification commands
+
+[source,shell]
+----
+ctest --preset debug
+npm --prefix workbench run check
+npm --prefix workbench run format:check
+python3 -m ruff check tests tools benchmarks
+python3 -m compileall -q tests tools benchmarks
+npm exec --yes --package=pyright -- pyright
+----
+
+Ruff is a development dependency: install it with `python3 -m pip install ruff`.
+The verification record includes exact tool versions, installation checks and test limitations.
+
+On Linux, the sanitizer preset enables AddressSanitizer and UndefinedBehaviorSanitizer:
+
+[source,shell]
+----
+cmake --preset sanitizers
+cmake --build --preset sanitizers --parallel 2
+ctest --preset sanitizers
+----

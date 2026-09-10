@@ -1,0 +1,37 @@
+= ADR 0004: Static SvelteKit workbench with a local native service
+
+Status:: Accepted
+Date:: 2026-09-10
+
+== Context
+
+The first prototype needs a visible task interpretation and reconciliation flow.
+The user selected C++ for the core and SvelteKit, TypeScript and GSAP for any web UI.
+The previous PS4 proposal is historical; the selected problem is now PS2.
+The target panel, display driver and Schneider SDK are not available here.
+
+== Decision
+
+Build the workbench with SvelteKit's static adapter. The C++ HTTP service serves the
+compiled files and the API on one origin. Run it on loopback by default.
+No cloud deployment is part of this local plant-runtime prototype.
+
+Keep interpretation, authoritative binding resolution and reconciliation in C++.
+The browser renders a fixed component catalog from the service's JSON description.
+The workbench does not evaluate generated source or own the machine model.
+
+Use a documentation-style interface: neutral surfaces, blue links, thin borders,
+compact tables, visible identifiers and a small orange accent. GSAP performs one
+short view-entry transition and respects reduced-motion preferences.
+
+== Consequences
+
+The workbench can be built once and served without a Node.js process at runtime.
+It gives the team a local surface for inspecting task interpretation and model changes.
+The renderer is replaceable at the screen-description boundary.
+
+This implementation does not prove that a browser fits the intended compact HMI panel.
+The planned LVGL client remains a separate implementation and requires a target display
+backend. Windows is an intended build target; Linux validation does not establish
+Windows compatibility. In-app timing reports an observed request round trip and must
+not be presented as graphics latency, a PLC deadline or a performance guarantee.

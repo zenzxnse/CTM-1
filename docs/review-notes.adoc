@@ -1,0 +1,57 @@
+= Correctness review notes
+
+Review date:: 2026-09-10
+
+The native adversarial checks cover same-ID metadata and relationship changes,
+repeated reconciliation, model and task identity, request scope, malformed
+models, cardinality limits, and client supplied dependencies. The CTest suites
+also exercise the HTTP API and provider boundary. The current integration set
+contains 13 Python API and inference tests. The checks are local and can be run
+with:
+
+[source,shell]
+----
+g++ -std=c++20 -I src -I third_party src/context_hmi/engine.cpp \
+  tests/test_adversarial.cpp -o /tmp/context-hmi-review
+/tmp/context-hmi-review
+----
+
+== Fixed findings
+
+* A same-ID tag owner, role, unit, type, or source change enters `conflict` and
+  preserves the old component binding. The owner-change fixture is
+  `pump-1.flow`.
+* A relationship ID is an identity too. Changes to its `from`, `to`, or `kind`
+  are reported as a relationship conflict.
+* Reconciliation retains dependency fingerprints and conflict state, so a
+  repeated reconciliation does not launder a conflict.
+* A task's `model_revision` and `model_id` are checked against the active model
+  before a ready view is returned. A mismatch cannot be treated as a compatible
+  revision.
+* An explicit unknown equipment reference in an overview request returns
+  clarification. Multiple supported task intents also return clarification.
+* Reconciliation validates dependency binding fields against trusted view data;
+  a missing or forged fingerprint or owner is not proof of a valid binding.
+* The provider validator accepts the native task envelope, including `model_id`,
+  and checks non-negative integer revisions against the active model.
+* Provider supplied anchor IDs and revisions are bound to the snapshotted model
+  before `resolve_task`; schema shape alone is not semantic validation.
+
+== Current boundaries
+
+* The HTTP server publishes server-authoritative view IDs and stores at most 64
+  canonical views in process memory. Each process has one `session_id`; a
+  scenario change increments `context_generation`. There is no persistent view,
+  session, or binding history.
+* The service uses deterministic simulator telemetry and exposes no physical PLC
+  command route. No physical OPC UA endpoint, Schneider runtime, or production
+  authentication has been tested.
+* The optional provider is a local HTTP integration. Its compact context is
+  bounded to 32 assets, 256 relationships, 512 tags, 512 alarms, and 24 KiB
+  serialized metadata. It excludes source references, including addresses, and
+  `data_type`, so it is not a scalable retrieval design. Tests use a local mock
+  provider; they do not establish interoperability with a live llama.cpp server or an AI model.
+* Input limits include 64 KiB mutation bodies, JSON depth 32, and 1 MiB model
+  files. SSE is a current telemetry stream with at most three clients, not a
+  durable event log. Unit text is compared as declared metadata; dimensional
+  conversion and process-model guarantees are outside this prototype.

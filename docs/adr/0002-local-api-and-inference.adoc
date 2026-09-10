@@ -1,0 +1,74 @@
+= ADR 0002: Local API and explicit inference provider
+
+Date:: 2026-09-10
+Status:: Accepted
+
+== Context
+
+PS2 needs a small local service that can expose the declared machine model to the
+Svelte workbench, produce simulated telemetry, and optionally ask a local
+llama.cpp HTTP server to interpret an operator request. The service is a
+prototype. It must not expose a physical command path or silently present a
+rule-based answer as an AI answer.
+
+== Decision
+
+The native service uses C++20 and loopback HTTP with cpp-httplib. Its API is
+versioned under `/api/v1`, returns JSON error envelopes, limits request bodies
+and prompts, and serves the built workbench from the same origin when
+`--web-dir` is supplied. Mutation requests check the `Origin` header and reject
+cross-origin callers. Binding is restricted to loopback unless the operator
+explicitly supplies `--allow-remote`.
+
+Simulation state and telemetry are independent of inference. Telemetry is
+created from a short model snapshot and streamed as current-value SSE snapshots
+at approximately 250 ms intervals. Inference has a bounded number of in-flight
+requests. A model snapshot is copied before a potentially slow provider call so
+neither the model mutex nor telemetry state is held during network I/O.
+
+The server adds `session_id` and `context_generation` to model and telemetry
+responses. Scenario activation resets the simulation tick and increments the
+generation. Resolved views receive server-generated IDs and are held in an
+authoritative process-local cache of at most 64 entries. Reconciliation uses the
+cached view, rejects an unknown ID or changed full payload, and reports a lost
+update if the cache changes during reconciliation. There is no persistent view,
+session, or binding history.
+
+The default interpreter is labelled `rules` and calls the deterministic native
+request interpreter. `--llama-url http://127.0.0.1:8081` explicitly enables the
+`llama.cpp` provider. That provider sends compact declared context
+(asset identities and aliases, declared relationships, tag roles, and alarms)
+to `/v1/chat/completions`. The context is bounded to 32 assets, 256
+relationships, 512 tags, 512 alarms, and 24 KiB serialized JSON. Source
+references, including addresses, and `data_type` are excluded, so this is a
+compact local context budget rather than a scalable retrieval design. It
+requires a typed `ready` or `clarification` interpretation, rejects unknown properties and unsupported task kinds, and
+returns provider errors to the caller. It never falls back to rules after a
+provider timeout, HTTP error or schema violation. The engine alone resolves a
+ready task into a view.
+
+Scenario files are selected by validated IDs from the configured models folder.
+No path supplied over HTTP is opened. The service exposes simulation controls
+only; it has no PLC or physical equipment command route.
+
+Mutation bodies are limited to 64 KiB, JSON depth to 32, and model files to 1
+MiB. Prompt input is limited to 8192 bytes at the HTTP boundary and by the
+native rule interpreter. The optional provider timeout is
+bounded to 100 through 30000 ms and defaults to 5000 ms. SSE is a current
+telemetry stream with at most three clients, not a durable event log.
+
+== Consequences
+
+The service is easy to run locally and the workbench can use same-origin API
+calls. The explicit provider boundary makes AI availability and failures
+visible. HTTP and JSON limits reduce accidental resource exhaustion, while the
+prototype remains intentionally unauthenticated and should stay on a trusted
+local interface unless remote binding is a deliberate operator choice.
+
+The model and provider behavior is covered by local native and integration tests.
+No physical OPC UA endpoint, Schneider runtime, production authentication, live
+llama.cpp server, or AI model has been tested.
+
+The llama request timeout defaults to 5 seconds and can be bounded explicitly
+with `--llama-timeout-ms` (100 to 30000 ms). Request duration is an observed
+local service measurement; the prototype does not promise real-time inference.
