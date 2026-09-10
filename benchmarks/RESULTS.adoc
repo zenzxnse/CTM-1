@@ -1,0 +1,26 @@
+= Smoke benchmark results
+
+Recorded on 2026-09-10 from the native Release build in this workspace.
+Measured native source revision: `76339f3be05483e40e2d1f2e5d53bfe7705cec0f`.
+The raw file preserves every sample and each trial's statistics.
+
+[cols="2,1,1,1",options="header"]
+|===
+|Operation |Pooled p50 (ms) |Pooled p95 (ms) |Median of trial p50s (ms)
+|`rule_interpret_resolve` |0.075689 |0.141209 |0.075603
+|`reconcile` |0.136831 |0.235097 |0.136695
+|===
+
+Environment: Linux x86_64, GCC 13.3.0, C++20, Release (`-O3 -DNDEBUG`),
+9 eligible CPUs. CPU time was shared; this is not a controlled hardware comparison.
+Workload: 5 assets, 7 tags, 2 alarm definitions, and a change from 4 to 5 relationships.
+Each metric has 7 sequential trials of 100 samples, with one operation per sample.
+
+The first metric includes rule interpretation, model validation/indexing and view resolution.
+The second includes full reconciliation from an original view against the revised model.
+It excludes HTTP, rendering, AI inference, PLC I/O and memory measurements. These results
+cannot establish request-to-screen latency or suitability for a compact HMI panel.
+
+* link:baseline-2026-09-10.json[Raw results]
+* link:baseline-2026-09-10-sources.json[SHA-256 hashes of measured source and fixtures]
+* link:README.adoc[Methodology and exact reproduction command]
