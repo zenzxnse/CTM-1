@@ -6,7 +6,6 @@
     ApiError,
     errorHint,
     fetchReady,
-    humanize,
     type ClientSurface,
     type ExecutionInfo,
     type Health,
@@ -16,18 +15,14 @@
     type Scenario,
     type SessionInfo,
     type Telemetry,
-    type View
+    type View,
+    qualityLabel
   } from '$lib/api';
   import { registerWorkbenchTools } from '$lib/agent-tools';
   import StatusBar from '$lib/components/StatusBar.svelte';
-  import PromptPanel from '$lib/components/PromptPanel.svelte';
-  import InterpretationReview from '$lib/components/InterpretationReview.svelte';
-  import TaskView from '$lib/components/TaskView.svelte';
-  import AlarmSummary from '$lib/components/AlarmSummary.svelte';
-  import WorkflowTimeline from '$lib/components/WorkflowTimeline.svelte';
+  import OverviewWorkspace from '$lib/components/OverviewWorkspace.svelte';
   import ContextInspector from '$lib/components/ContextInspector.svelte';
   import DiagnosticsPanel from '$lib/components/DiagnosticsPanel.svelte';
-  import ExecutionPanel from '$lib/components/ExecutionPanel.svelte';
   import RoleFilter from '$lib/components/RoleFilter.svelte';
 
   type Section = 'overview' | 'context' | 'diagnostics' | 'guide';
@@ -75,6 +70,7 @@
   let feedAgeMilliseconds = $derived(lastReceived ? Math.max(0, now - lastReceived) : null);
   let feedStale = $derived(receiving && (feedAgeMilliseconds ?? Infinity) >= 3000);
   let feedFresh = $derived(receiving && !feedStale);
+  let feedQuality = $derived(telemetry ? qualityLabel(telemetry.quality) : 'Unknown');
   let fresh = $derived(
     feedFresh &&
       telemetry !== null &&
@@ -92,7 +88,9 @@
         view.context_generation !== telemetry.context_generation)
   );
   let activeAlarmCount = $derived((telemetry?.alarms ?? []).filter((alarm) => alarm.active).length);
-  let feedLabel = $derived(!receiving ? 'Disconnected' : feedStale ? 'Delayed' : 'Live');
+  let feedLabel = $derived(
+    !receiving ? 'Disconnected' : feedStale ? 'Delayed' : `Live · ${feedQuality}`
+  );
   let feedAge = $derived(
     feedAgeMilliseconds === null ? 'No message' : `${Math.floor(feedAgeMilliseconds / 1000)}s ago`
   );
@@ -456,6 +454,7 @@
       {feedLabel}
       {feedStale}
       {feedAge}
+      {feedQuality}
       feedDisconnected={!receiving}
       onReconnect={connectFeed}
     />
@@ -480,117 +479,34 @@
     {/if}
 
     {#if section === 'overview'}
-      <div class="runtime-layout">
-        <div class="runtime-main">
-          <PromptPanel bind:prompt bind:interpreter {busy} {health} oncompose={compose} />
-          {#if notice}<div class="message notice" role="status"><p>{notice}</p></div>{/if}
-          {#if interpretation}<InterpretationReview
-              {interpretation}
-              {busy}
-              onpick={(name) => void pickCandidate(name)}
-            />{/if}
-          <ExecutionPanel {execution} />
-          <AlarmSummary {telemetry} fresh={feedFresh} />
-          {#if view}<TaskView
-              {view}
-              {telemetry}
-              {fresh}
-              {differentContext}
-              bind:inspectBindings
-              bind:element={viewElement}
-            />{:else}<div class="empty-view">
-              <span class="empty-icon" aria-hidden="true">[ ]</span>
-              <h2>{booting ? 'Connecting to the service' : 'Your task view will appear here'}</h2>
-              <p>
-                {booting
-                  ? 'Loading declared context and provider state.'
-                  : 'Ask for a view to resolve components against the current model.'}
-              </p>
-            </div>{/if}
-        </div>
-        <aside class="context-rail" aria-label="Request and data details">
-          <section class="rail-section">
-            <h2>Interpreted task</h2>
-            {#if view}<dl class="task-facts">
-                <dt>Task</dt>
-                <dd>{humanize(view.task.kind)}</dd>
-                <dt>Equipment</dt>
-                <dd><code>{view.task.anchor_asset_id || 'All declared equipment'}</code></dd>
-                <dt>Interpreter</dt>
-                <dd>{viewInterpreter.startsWith('llama') ? 'Local AI' : 'Rules'}</dd>
-                <dt>Model revision</dt>
-                <dd>{view.model_revision}</dd>
-              </dl>
-              <p class="rail-note">
-                Every component shows its declared binding reason and source identity.
-              </p>{:else}<p class="rail-note">
-                A resolved request will show its equipment scope here.
-              </p>{/if}
-          </section>
-          <section class="rail-section">
-            <h2>Model revision</h2>
-            <p>
-              Switch between declared configurations to revalidate a saved view and inspect binding
-              changes.
-            </p>
-            <label for="scenario">Machine configuration</label><select
-              id="scenario"
-              bind:value={currentScenario}
-              disabled={busy || !scenarios.length}
-              onchange={switchScenario}
-              >{#each scenarios as scenario (scenario.id)}<option value={scenario.id}
-                  >{scenario.name}{scenario.revision ? ` · r${scenario.revision}` : ''}</option
-                >{/each}</select
-            >
-            <p class="rail-note">
-              {scenarios.find((scenario) => scenario.id === currentScenario)?.description ??
-                'No alternate configuration loaded.'}
-            </p>
-          </section>
-          <section class="rail-section">
-            <h2>Live telemetry</h2>
-            <dl class="task-facts">
-              <dt>Source</dt>
-              <dd>{health?.mode ?? 'Unknown'}</dd>
-              <dt>Last message</dt>
-              <dd>{feedAge}</dd>
-              <dt>Sequence</dt>
-              <dd>{telemetry?.sequence ?? 'Unknown'}</dd>
-              <dt>Quality</dt>
-              <dd>{telemetry ? humanize(telemetry.quality) : 'Unknown'}</dd>
-              <dt>Values</dt>
-              <dd>{telemetry ? Object.keys(telemetry.values).length : 'Unknown'}</dd>
-            </dl>
-            <p class="rail-note">
-              Current values are server-owned. Stale or unknown data is never presented as valid.
-            </p>
-          </section>
-          <section class="rail-section">
-            <h2>Client surface</h2>
-            <dl class="task-facts">
-              <dt>Viewport</dt>
-              <dd>{viewport.width_px} × {viewport.height_px}</dd>
-              <dt>Size class</dt>
-              <dd>{viewport.size_class}</dd>
-            </dl>
-            <p class="rail-note">
-              The current surface is sent as optional request metadata so the composer can select a
-              suitable layout.
-            </p>
-          </section>
-          <section class="rail-section timing">
-            <h2>Browser request time</h2>
-            <p class="timing-value">
-              {requestMilliseconds === null ? 'No measurement' : `${requestMilliseconds} ms`}
-            </p>
-            <p class="rail-note">
-              Round trip only. Inspect execution details for context size, provider usage, and cache
-              state.
-            </p>
-          </section>
-        </aside>
-      </div>
-      <WorkflowTimeline steps={workflowSteps} />
+      <OverviewWorkspace
+        bind:prompt
+        bind:interpreter
+        {busy}
+        {health}
+        {notice}
+        {interpretation}
+        {execution}
+        {telemetry}
+        {feedFresh}
+        {view}
+        {fresh}
+        {differentContext}
+        {viewInterpreter}
+        bind:inspectBindings
+        {model}
+        {scenarios}
+        bind:currentScenario
+        {viewport}
+        {feedAge}
+        {requestMilliseconds}
+        {workflowSteps}
+        {booting}
+        bind:viewElement
+        oncompose={compose}
+        onpick={(name) => void pickCandidate(name)}
+        onswitchscenario={() => void switchScenario()}
+      />
     {:else if section === 'context'}
       <p class="intro">
         The declared model is the source of truth for identities, ownership, units, relationships,

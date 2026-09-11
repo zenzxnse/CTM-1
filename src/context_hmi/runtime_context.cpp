@@ -33,11 +33,24 @@ std::string normalized_cache_prompt(const std::string& prompt) {
   return result;
 }
 
+context::RetrievalLimits retrieval_limits(const RuntimeOptions& options) {
+  context::RetrievalLimits limits;
+  limits.max_serialized_bytes = static_cast<std::size_t>(options.provider_context_bytes);
+  limits.max_estimated_tokens = (limits.max_serialized_bytes + 3U) / 4U;
+  return limits;
+}
+
 std::string cache_key(const Json& model, std::uint64_t generation,
-                      const std::string& mode, const std::string& prompt) {
+                      const RuntimeOptions& options, const std::string& mode,
+                      const std::string& prompt) {
   return model.at("model_id").get<std::string>() + "\x1f" +
          std::to_string(model.at("revision").get<std::uint64_t>()) + "\x1f" +
          std::to_string(generation) + "\x1f" + mode + "\x1f" +
+         options.provider_url + "\x1f" + options.provider_model + "\x1f" +
+         std::to_string(options.provider_timeout_ms) + "\x1f" +
+         std::to_string(options.provider_context_bytes) + "\x1f" +
+         std::to_string(options.provider_max_output_tokens) + "\x1f" +
+         std::to_string(options.allow_remote_inference) + "\x1f" +
          normalized_cache_prompt(prompt);
 }
 
@@ -72,11 +85,12 @@ Json context_summary(const Json& retrieval) {
 
 Json Runtime::retrieve(const std::string& prompt) {
   auto [model, generation] = model_snapshot();
-  const auto key = cache_key(model, generation, "retrieval", prompt);
+  const auto limits = retrieval_limits(options_);
+  const auto key = cache_key(model, generation, options_, "retrieval", prompt);
   const auto started = std::chrono::steady_clock::now();
   auto cached = retrieval_cache_.get(key);
   const bool cache_hit = cached.has_value();
-  auto result = cached ? std::move(*cached) : context::retrieve(model, prompt);
+  auto result = cached ? std::move(*cached) : context::retrieve(model, prompt, limits);
   if (!cache_hit) {
     retrieval_cache_.put(key, result);
   }
@@ -107,17 +121,18 @@ Json Runtime::interpret(const std::string& prompt, const std::string& mode,
                         const Json& client) {
   auto [model, generation] = model_snapshot();
   const auto started = std::chrono::steady_clock::now();
-  const auto retrieval_key = cache_key(model, generation, "retrieval", prompt);
+  const auto limits = retrieval_limits(options_);
+  const auto retrieval_key = cache_key(model, generation, options_, "retrieval", prompt);
   auto cached_retrieval = retrieval_cache_.get(retrieval_key);
   const bool retrieval_hit = cached_retrieval.has_value();
   Json retrieval = cached_retrieval ? std::move(*cached_retrieval)
-                                    : context::retrieve(model, prompt);
+                                    : context::retrieve(model, prompt, limits);
   if (!retrieval_hit) {
     retrieval_cache_.put(retrieval_key, retrieval);
   }
   const std::string selected_mode = mode.empty() ? inference_.mode() : mode;
   const auto interpretation_key =
-      cache_key(model, generation, selected_mode, prompt);
+      cache_key(model, generation, options_, selected_mode, prompt);
   auto cached_interpretation = interpretation_cache_.get(interpretation_key);
   const bool interpretation_hit = cached_interpretation.has_value();
   Json result;

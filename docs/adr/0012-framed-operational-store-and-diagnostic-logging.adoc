@@ -3,6 +3,12 @@
 Status:: Accepted
 Date:: 2026-09-11
 
+== Active-scope note
+
+ADR 0017 removed the simulator command gateway. Command and simulator references
+below record the earlier motivation; the active service uses the same framed store
+for saved tasks, accepted model revisions and other required operational records.
+
 == Context
 
 Diagnostic messages and operational evidence have different loss and recovery requirements. A

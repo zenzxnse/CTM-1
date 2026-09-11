@@ -1,6 +1,8 @@
 #include "context_hmi/http_server.hpp"
 
+#include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <memory>
 #include <string>
 #include <utility>
@@ -11,6 +13,40 @@
 
 namespace context_hmi::http {
 namespace {
+
+std::string lower_ascii(std::string value) {
+  std::transform(value.begin(), value.end(), value.begin(),
+                 [](unsigned char character) {
+                   return static_cast<char>(std::tolower(character));
+                 });
+  return value;
+}
+
+bool has_connection_token(const std::string& value, const std::string& token) {
+  std::size_t begin = 0;
+  while (begin <= value.size()) {
+    const auto end = value.find(',', begin);
+    const auto length = end == std::string::npos ? value.size() - begin
+                                                 : end - begin;
+    std::size_t first = begin;
+    std::size_t last = begin + length;
+    while (first < last && std::isspace(static_cast<unsigned char>(value[first]))) {
+      ++first;
+    }
+    while (last > first &&
+           std::isspace(static_cast<unsigned char>(value[last - 1]))) {
+      --last;
+    }
+    if (value.compare(first, last - first, token) == 0) {
+      return true;
+    }
+    if (end == std::string::npos) {
+      break;
+    }
+    begin = end + 1;
+  }
+  return false;
+}
 
 class StreamPump final : public std::enable_shared_from_this<StreamPump> {
  public:
@@ -60,7 +96,9 @@ class StreamPump final : public std::enable_shared_from_this<StreamPump> {
       return;
     }
     if (timer_ != trantor::InvalidTimerId) {
-      loop_->invalidateTimer(timer_);
+      if (loop_ != nullptr) {
+        loop_->invalidateTimer(timer_);
+      }
       timer_ = trantor::InvalidTimerId;
     }
     if (stream_) {
@@ -123,11 +161,11 @@ void register_stream_routes(drogon::HttpAppFramework& app,
       "/api/v1/events",
       [&runtime](const drogon::HttpRequestPtr& request,
                  ResponseCallback&& callback) {
-        const auto& connection = request->getHeader("connection");
+        const auto connection = lower_ascii(request->getHeader("connection"));
         const bool closes_response =
-            connection == "close" ||
+            has_connection_token(connection, "close") ||
             (request->getVersion() == drogon::Version::kHttp10 &&
-             connection != "keep-alive");
+             !has_connection_token(connection, "keep-alive"));
         if (closes_response) {
           try {
             auto response = drogon::HttpResponse::newHttpResponse();
@@ -148,17 +186,40 @@ void register_stream_routes(drogon::HttpAppFramework& app,
               error_json("events_busy", "SSE client limit reached"), 429));
           return;
         }
-        auto response = drogon::HttpResponse::newAsyncStreamResponse(
-            [&runtime](drogon::ResponseStreamPtr stream) {
-              auto* loop = trantor::EventLoop::getEventLoopOfCurrentThread();
-              if (loop == nullptr) {
-                loop = drogon::app().getLoop();
-              }
-              auto pump = std::make_shared<StreamPump>(
-                  runtime, loop, std::move(stream));
-              loop->queueInLoop([pump = std::move(pump)] { pump->start(); });
-            },
-            true);
+        drogon::HttpResponsePtr response;
+        try {
+          response = drogon::HttpResponse::newAsyncStreamResponse(
+              [&runtime](drogon::ResponseStreamPtr stream) {
+                auto* loop = trantor::EventLoop::getEventLoopOfCurrentThread();
+                if (loop == nullptr) {
+                  loop = drogon::app().getLoop();
+                }
+                std::shared_ptr<StreamPump> stream_pump;
+                try {
+                  stream_pump = std::make_shared<StreamPump>(
+                      runtime, loop, std::move(stream));
+                } catch (...) {
+                  runtime.release_sse_client();
+                  return;
+                }
+                if (loop == nullptr) {
+                  return;
+                }
+                try {
+                  loop->queueInLoop([stream_pump = std::move(stream_pump)] {
+                    stream_pump->start();
+                  });
+                } catch (...) {
+                  /* The moved callback or local owner releases the stream lease. */
+                }
+              },
+              true);
+        } catch (...) {
+          runtime.release_sse_client();
+          callback(json_response(
+              error_json("events_error", "event stream could not be started"), 500));
+          return;
+        }
         response->setContentTypeString("text/event-stream");
         response->addHeader("Cache-Control", "no-cache");
         response->addHeader("Connection", "keep-alive");

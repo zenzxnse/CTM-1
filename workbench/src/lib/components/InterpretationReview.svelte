@@ -20,13 +20,24 @@
   let candidates = $derived(
     (interpretation.candidates ?? []).map((candidate) =>
       typeof candidate === 'string'
-        ? { asset_id: candidate, name: candidate }
+        ? {
+            asset_id: candidate,
+            name: candidate,
+            kind: undefined,
+            score: undefined,
+            eligible: false
+          }
         : {
             asset_id: candidate.asset_id ?? 'Unknown asset',
-            name: candidate.name ?? candidate.asset_id ?? 'Unknown asset'
+            name: candidate.name ?? candidate.asset_id ?? 'Unknown asset',
+            kind: candidate.kind,
+            score: candidate.score,
+            eligible: candidate.eligible
           }
     )
   );
+  let context = $derived(interpretation.execution?.context);
+  let taskRoles = $derived(interpretation.task?.measurement_roles ?? []);
 </script>
 
 <section class="review-panel" aria-labelledby="review-title">
@@ -48,8 +59,62 @@
       <dd><code>{interpretation.task.anchor_asset_id || 'All declared equipment'}</code></dd>
       <dt>Model revision</dt>
       <dd>{interpretation.task.model_revision}</dd>
+      <dt>Validation</dt>
+      <dd>Native scope and binding checks required</dd>
     {/if}
   </dl>
+  {#if interpretation.task || context}
+    <div class="scope-summary" aria-label="Interpreted scope evidence">
+      <div class="scope-summary-heading">
+        <span class="eyebrow">Interpreted scope</span>
+        <span class="scope-summary-status">Server evidence</span>
+      </div>
+      <div class="scope-summary-grid">
+        {#if interpretation.task}
+          <div>
+            <span>Requested task</span>
+            <strong>{humanize(interpretation.task.kind)}</strong>
+          </div>
+          <div>
+            <span>Anchor</span>
+            <strong
+              ><code>{interpretation.task.anchor_asset_id ?? 'All eligible assets'}</code></strong
+            >
+          </div>
+          <div>
+            <span>Measurement roles</span>
+            <strong
+              >{taskRoles.length ? taskRoles.map(humanize).join(', ') : 'Declared defaults'}</strong
+            >
+          </div>
+        {/if}
+        {#if context}
+          <div>
+            <span>Retrieved context</span>
+            <strong>{context.assets ?? '?'} assets · {context.tags ?? '?'} tags</strong>
+          </div>
+          <div>
+            <span>Candidate set</span>
+            <strong>{context.candidates ?? candidates.length} considered</strong>
+          </div>
+          <div>
+            <span>Context bound</span>
+            <strong>{context.bytes ?? '?'} bytes · {context.estimated_tokens ?? '?'} tokens</strong>
+          </div>
+        {/if}
+      </div>
+      {#if context?.truncated}
+        <p class="scope-warning">
+          ▲ Retrieval was bounded and truncated. Review the candidate evidence before relying on
+          this view.
+        </p>
+      {:else}
+        <p class="scope-note">
+          Only this retrieved, revision-matched scope is eligible for native resolution.
+        </p>
+      {/if}
+    </div>
+  {/if}
   {#if !ready}
     {#if interpretation.message}
       <p class="review-message">{interpretation.message}</p>

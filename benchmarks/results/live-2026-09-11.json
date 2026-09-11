@@ -1,0 +1,299 @@
+{
+  "schema_version": "context-hmi-live-benchmark/2",
+  "recorded_utc": "2026-09-11T00:41:31.634514Z",
+  "evidence_class": "measured-local-run",
+  "environment": {
+    "os": "Linux-6.14.0-37-generic-x86_64-with-glibc2.39",
+    "machine": "x86_64",
+    "python": "3.13.13",
+    "pid": 108429
+  },
+  "workload": {
+    "samples": 80,
+    "concurrency": 16,
+    "model_id": "assembly-line-a",
+    "model_revision": 1,
+    "telemetry_source": "external JSON ingestion",
+    "provider": "rules"
+  },
+  "readiness": {
+    "inference": {
+      "configured": true,
+      "provider": "rules",
+      "ready": true
+    },
+    "ready": true,
+    "service": {
+      "lifecycle": {
+        "component": "service",
+        "reason": "",
+        "state": "ready",
+        "transitions": 1
+      },
+      "ready": true
+    },
+    "source": {
+      "current_values": 8,
+      "kind": "telemetry-ingestion",
+      "lifecycle": {
+        "component": "source",
+        "reason": "current data received",
+        "state": "ready",
+        "transitions": 2
+      },
+      "ready": true,
+      "reason": "current data received"
+    }
+  },
+  "measurements": {
+    "cold_interpretation_ms": 8.080348,
+    "warm_interpretation_ms": {
+      "count": 80,
+      "minimum": 6.670371,
+      "p50": 7.5172665,
+      "p95": 8.36306175,
+      "maximum": 8.682059,
+      "mean": 7.5591026125
+    },
+    "reconciliation_ms": 0.497945,
+    "concurrent_telemetry": {
+      "requests": 64,
+      "clients": 16,
+      "failures": 0,
+      "wall_ms": 19.069718,
+      "per_request_ms": {
+        "count": 64,
+        "minimum": 0.876957,
+        "p50": 2.4028005,
+        "p95": 4.420350249999999,
+        "maximum": 6.268792,
+        "mean": 2.64697953125
+      }
+    },
+    "service_resident_bytes": 14483456
+  },
+  "interpretation": {
+    "status": "ready",
+    "cold_execution": {
+      "cache": {
+        "interpretation": {
+          "state": "miss"
+        },
+        "retrieval": {
+          "state": "miss"
+        }
+      },
+      "context": {
+        "alarm_count": 0,
+        "alarms": 0,
+        "any_truncated": false,
+        "asset_count": 4,
+        "assets": 4,
+        "bytes": 1992,
+        "candidate_count": 1,
+        "candidates": 1,
+        "estimated_tokens": 498,
+        "relationship_count": 5,
+        "relationships": 5,
+        "serialized_bytes": 1992,
+        "tag_count": 2,
+        "tags": 2,
+        "token_estimate": "utf8-bytes-divided-by-four",
+        "truncated": false,
+        "truncation": {
+          "alarms": false,
+          "assets": false,
+          "candidates": false,
+          "estimated_tokens": false,
+          "measurement_roles": false,
+          "relationships": false,
+          "serialized_bytes": false,
+          "tags": false
+        }
+      },
+      "context_generation": 0,
+      "elapsed_ms": 0.339,
+      "elapsed_us": 339,
+      "model_id": "assembly-line-a",
+      "model_revision": 1,
+      "provider_call": false,
+      "provider_usage": {
+        "provider_call": false,
+        "reported": false
+      },
+      "validation": "native-scope-validated"
+    },
+    "warm_execution": {
+      "cache": {
+        "interpretation": {
+          "state": "hit"
+        },
+        "retrieval": {
+          "state": "hit"
+        }
+      },
+      "context": {
+        "alarm_count": 0,
+        "alarms": 0,
+        "any_truncated": false,
+        "asset_count": 4,
+        "assets": 4,
+        "bytes": 1992,
+        "candidate_count": 1,
+        "candidates": 1,
+        "estimated_tokens": 498,
+        "relationship_count": 5,
+        "relationships": 5,
+        "serialized_bytes": 1992,
+        "tag_count": 2,
+        "tags": 2,
+        "token_estimate": "utf8-bytes-divided-by-four",
+        "truncated": false,
+        "truncation": {
+          "alarms": false,
+          "assets": false,
+          "candidates": false,
+          "estimated_tokens": false,
+          "measurement_roles": false,
+          "relationships": false,
+          "serialized_bytes": false,
+          "tags": false
+        }
+      },
+      "context_generation": 0,
+      "elapsed_ms": 0.02,
+      "elapsed_us": 20,
+      "model_id": "assembly-line-a",
+      "model_revision": 1,
+      "provider_call": false,
+      "provider_usage": {
+        "provider_call": false,
+        "reported": false
+      },
+      "validation": "native-scope-validated"
+    }
+  },
+  "runtime_metrics": {
+    "cache": {
+      "interpretation": {
+        "capacity": 128,
+        "entries": 1,
+        "evictions": 0,
+        "expirations": 0,
+        "hits": 80,
+        "invalidations": 0,
+        "misses": 1,
+        "ttl_ms": 300000
+      },
+      "retrieval": {
+        "capacity": 256,
+        "entries": 1,
+        "evictions": 0,
+        "expirations": 0,
+        "hits": 80,
+        "invalidations": 0,
+        "misses": 1,
+        "ttl_ms": 300000
+      }
+    },
+    "diagnostics": {
+      "accepted": 83,
+      "accepting": true,
+      "dropped": 0,
+      "enabled": true,
+      "failed": false,
+      "fallback": 0,
+      "maximum_record_bytes": 1048576,
+      "queue_capacity": 1024,
+      "queue_depth": 0,
+      "rotation_bytes": 8388608,
+      "rotation_files": 3,
+      "written": 83
+    },
+    "execution": {
+      "accepting": true,
+      "active": 0,
+      "completed": 83,
+      "failed": 0,
+      "queue_capacity": 64,
+      "queue_depth": 0,
+      "rejected": 0,
+      "submitted": 83,
+      "workers": 4
+    },
+    "inference_inflight": 0,
+    "lifecycle": {
+      "provider": {
+        "component": "provider",
+        "reason": "",
+        "state": "ready",
+        "transitions": 1
+      },
+      "service": {
+        "component": "service",
+        "reason": "",
+        "state": "ready",
+        "transitions": 1
+      },
+      "source": {
+        "component": "source",
+        "reason": "current data received",
+        "state": "ready",
+        "transitions": 2
+      },
+      "store": {
+        "component": "store",
+        "reason": "",
+        "state": "ready",
+        "transitions": 2
+      }
+    },
+    "model_changes": 0,
+    "model_watch_enabled": false,
+    "model_watch_failures": 0,
+    "provider_execution": {
+      "accepting": true,
+      "active": 0,
+      "completed": 1,
+      "failed": 0,
+      "queue_capacity": 16,
+      "queue_depth": 0,
+      "rejected": 0,
+      "submitted": 1,
+      "workers": 4
+    },
+    "saved_views": 64,
+    "schema_version": "context-hmi-metrics/1",
+    "source": {
+      "accepted_batches": 1,
+      "accepted_values": 8,
+      "context_generation": 0,
+      "current_values": 8,
+      "kind": "telemetry-ingestion",
+      "last_received_timestamp_ms": 1789087290997,
+      "maximum_values_per_batch": 512,
+      "rejected_batches": 0,
+      "sources": 1,
+      "stale_after_ms": 3000
+    },
+    "sse_client_limit": 3,
+    "sse_clients": 0,
+    "store": {
+      "bytes": 27045,
+      "enabled": true,
+      "format": "context-hmi-journal/1",
+      "maximum_bytes": 67108864,
+      "recent_limit": 512,
+      "recent_records": 82,
+      "records": 82,
+      "recovered_tail_bytes": 0,
+      "synchronous": true
+    }
+  },
+  "limitations": [
+    "shared workstation, not controlled target hardware",
+    "rules provider, not a measured model inference run",
+    "authored request, not a held-out interpretation set",
+    "container and cross-platform measurements require their named environments"
+  ]
+}

@@ -99,7 +99,10 @@ class CurrentStandaloneApi(ServiceTestCase):
 
         second_status, second = self.post(
             "/api/v1/interpret",
-            {"prompt": f"  SHOW   AN   OVERVIEW OF   {asset_name.upper()}  ", "interpreter": "rules"},
+            {
+                "prompt": f"  SHOW   AN   OVERVIEW OF   {asset_name.upper()}  ",
+                "interpreter": "rules",
+            },
         )
         self.assertEqual(second_status, 200, second)
         self.assertEqual(second["execution"]["cache"]["interpretation"]["state"], "hit")
@@ -108,7 +111,10 @@ class CurrentStandaloneApi(ServiceTestCase):
             {key: value for key, value in first["task"].items() if key != "original_request"},
             {key: value for key, value in second["task"].items() if key != "original_request"},
         )
-        self.assertEqual(second["task"]["original_request"], f"  SHOW   AN   OVERVIEW OF   {asset_name.upper()}  ")
+        self.assertEqual(
+            second["task"]["original_request"],
+            f"  SHOW   AN   OVERVIEW OF   {asset_name.upper()}  ",
+        )
 
         metrics_status, metrics = self.get("/api/v1/metrics")
         self.assertEqual(metrics_status, 200)
@@ -129,7 +135,10 @@ class CurrentStandaloneApi(ServiceTestCase):
         )
         self.assertEqual(self.post("/api/v1/telemetry", batch)[0], 202)
         self.assertEqual(
-            self.post("/api/v1/interpret", {"prompt": "Show an overview", "interpreter": "rules"})[0],
+            self.post(
+                "/api/v1/interpret",
+                {"prompt": "Show an overview", "interpreter": "rules"},
+            )[0],
             200,
         )
         before = self.health()

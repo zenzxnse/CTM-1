@@ -6,6 +6,20 @@
   function number(value: number | undefined, suffix = ''): string {
     return value === undefined || !Number.isFinite(value) ? 'Not reported' : `${value}${suffix}`;
   }
+
+  function cacheDetail(
+    cache: { state?: string; hits?: number; misses?: number } | undefined
+  ): string {
+    if (!cache) return 'Not reported';
+    const state = cache.state ?? 'unknown';
+    const counts = [
+      cache.hits !== undefined ? `${cache.hits} hits` : '',
+      cache.misses !== undefined ? `${cache.misses} misses` : ''
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    return counts ? `${state} · ${counts}` : state;
+  }
 </script>
 
 <section class="execution-panel" aria-labelledby="execution-title">
@@ -24,11 +38,11 @@
     <div class="execution-grid">
       <div class="execution-stat">
         <span>Interpretation cache</span>
-        <strong>{execution.cache?.interpretation?.state ?? 'Unknown'}</strong>
+        <strong>{cacheDetail(execution.cache?.interpretation)}</strong>
       </div>
       <div class="execution-stat">
         <span>Retrieval cache</span>
-        <strong>{execution.cache?.retrieval?.state ?? 'Unknown'}</strong>
+        <strong>{cacheDetail(execution.cache?.retrieval)}</strong>
       </div>
       <div class="execution-stat">
         <span>Context</span>
@@ -38,7 +52,11 @@
       <div class="execution-stat">
         <span>Provider tokens</span>
         <strong>{number(execution.provider_usage?.total_tokens)}</strong>
-        <small>{number(execution.provider_usage?.cached_prompt_tokens)} cached prompt</small>
+        <small
+          >{execution.provider_usage?.reported === false
+            ? 'Provider did not report usage'
+            : `${number(execution.provider_usage?.cached_prompt_tokens)} cached prompt`}</small
+        >
       </div>
     </div>
     <dl class="execution-facts">

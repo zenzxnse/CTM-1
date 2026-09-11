@@ -46,6 +46,36 @@ Open http://127.0.0.1:8080[the local workbench]. Enter a request such as
 `Show the status of the packaging line`. Post a current telemetry batch to
 `/api/v1/telemetry` and inspect the generated view and execution metadata.
 
+For a single-command local showcase, copy `.env.example` to the ignored `.env`
+file and run:
+
+[source,shell]
+----
+./scripts/bootstrap.sh
+----
+
+The bootstrap builds the workbench and native service, imports the reviewed
+engineering bundle, starts Drogon, and posts one timestamped external-data fixture
+so values are immediately visible. It does not start a simulator. The showcase
+snapshot stays current for five minutes; set `CONTEXT_HMI_STALE_AFTER_MS` to the
+real source update tolerance when an adapter continuously posts operational data.
+Press Ctrl+C to stop it. Set `CONTEXT_HMI_SKIP_BUILD=1` for later starts once the
+selected binaries and workbench are already current.
+
+To use Groq, put the key only in `.env` and select the opt-in remote profile:
+
+[source]
+----
+CONTEXT_HMI_INFERENCE=groq
+GROQ_API_KEY=gsk_replace_with_your_key
+GROQ_MODEL=openai/gpt-oss-20b
+----
+
+Groq mode builds and runs the TLS profile automatically. The ignored `.env` file is
+not installed, packaged, or sent to the browser. Only bounded retrieved context is
+sent to the configured HTTPS endpoint; use rules mode when plant-context policy does
+not permit remote inference.
+
 == API and configuration
 
 The HTTP API is versioned under `/api/v1` and uses JSON envelopes. The important
@@ -76,12 +106,15 @@ To create a model from a reviewed engineering bundle, use the context importer:
 ----
 ./build/linux-debug/context-hmi-context --bundle examples/artifacts \
   --output build/assembly-line-import-result.json
-jq '.model' build/assembly-line-import-result.json > build/assembly-line.json
+./build/linux-debug/context-hmi --config config/context-hmi.json \
+  --model build/assembly-line-import-result.json \
+  --models examples/machines --web-dir workbench/build
 ----
 
-Review the import report before supplying the extracted model to the service. The
-importer never derives ownership or relationships from names, paths or protocol
-addresses.
+Review the `report` member before supplying the importer result to the service. The
+service accepts either the native model object or this `{model, report}` wrapper, so
+no lossy extraction step is needed. The importer never derives ownership or
+relationships from names, paths or protocol addresses.
 
 The service uses Drogon for HTTP and the framed operational journal for required
 records. It does not use SQLite. Diagnostic logs, operational records, current
@@ -105,11 +138,16 @@ Run the workbench checks, native Debug and Release suites, sanitizer profile,
 package smoke checks and platform-specific jobs from the repository workflow.
 Raw benchmark JSON is preserved and plots are generated only from measured data:
 
+image::benchmarks/results/context-hmi-2026-09-11.svg[Measured Context HMI release workload,100%]
+
 [source,shell]
 ----
 python3 benchmarks/live.py --build-dir build/linux-release \
   --save build/benchmarks/live.json
+python3 benchmarks/run.py --binary build/linux-release/context-hmi-benchmark \
+  --save build/benchmarks/native.json
 python3 benchmarks/plot.py --live build/benchmarks/live.json \
+  --native build/benchmarks/native.json \
   --output build/benchmarks/context-hmi.svg
 ----
 

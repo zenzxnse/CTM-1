@@ -1,0 +1,38 @@
+@media (pointer: coarse) {
+  button,
+  select,
+  input[type='search'] {
+    min-height: 44px;
+  }
+}
+@media (max-width: 1150px) {
+  .status-strip {
+    gap: 8px 18px;
+  }
+}
+@media (max-width: 900px) {
+  .advisory-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 760px) {
+  .status-strip {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 12px 14px;
+  }
+  .status-chip {
+    flex-direction: column;
+    gap: 3px;
+    align-items: flex-start;
+  }
+  .review-facts,
+  .provenance-facts {
+    grid-template-columns: 96px minmax(0, 1fr);
+  }
+}
+@media (max-width: 400px) {
+  .status-strip {
+    grid-template-columns: 1fr;
+  }
+}

@@ -15,6 +15,8 @@ struct RetrievalLimits {
   std::size_t relationships{64};
   std::size_t tags{128};
   std::size_t alarms{128};
+  std::size_t max_serialized_bytes{12288};
+  std::size_t max_estimated_tokens{3072};
 };
 
 /** Build a deterministic, bounded subgraph relevant to one operator request. */
@@ -26,4 +28,3 @@ void validate_interpretation_scope(const Json& model, const Json& retrieval,
                                    const Json& interpretation);
 
 }  /* namespace context_hmi::context */
-

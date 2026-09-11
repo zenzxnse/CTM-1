@@ -52,8 +52,9 @@ void put_u64(std::array<unsigned char, kFrameHeaderSize>& output, std::size_t of
 
 std::uint16_t get_u16(const std::array<unsigned char, kFrameHeaderSize>& input,
                       std::size_t offset) {
-  return static_cast<std::uint16_t>(input[offset]) |
-         static_cast<std::uint16_t>(input[offset + 1]) << 8U;
+  return static_cast<std::uint16_t>(
+      static_cast<std::uint32_t>(input[offset]) |
+      (static_cast<std::uint32_t>(input[offset + 1]) << 8U));
 }
 
 std::uint32_t get_u32(const std::array<unsigned char, kFrameHeaderSize>& input,

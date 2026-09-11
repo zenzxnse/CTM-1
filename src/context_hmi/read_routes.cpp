@@ -70,7 +70,10 @@ void register_read_routes(drogon::HttpAppFramework& app,
         if (!limit) {
           return;
         }
-        callback(json_response(runtime.audit(*limit)));
+        dispatch_json(runtime.cpu_workers(), std::move(callback),
+                      [&runtime, limit = *limit] {
+                        return JsonResult{runtime.audit(limit), 200};
+                      });
       },
       {drogon::Get});
 
@@ -82,7 +85,10 @@ void register_read_routes(drogon::HttpAppFramework& app,
         if (!limit) {
           return;
         }
-        callback(json_response(runtime.records(*limit)));
+        dispatch_json(runtime.cpu_workers(), std::move(callback),
+                      [&runtime, limit = *limit] {
+                        return JsonResult{runtime.records(limit), 200};
+                      });
       },
       {drogon::Get});
 }

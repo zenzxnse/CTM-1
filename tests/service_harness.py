@@ -29,7 +29,7 @@ MODELS = Path(os.environ.get("CONTEXT_HMI_MODELS", ROOT / "examples/machines"))
 
 def resolve_binary() -> Path:
     configured = os.environ.get("CONTEXT_HMI_BINARY")
-    candidate = Path(configured) if configured else ROOT / "build/debug/context-hmi"
+    candidate = Path(configured) if configured else ROOT / "build/linux-debug/context-hmi"
     if candidate.exists():
         return candidate
     with_suffix = candidate.with_suffix(".exe")
@@ -118,21 +118,6 @@ def stop_service(process: subprocess.Popen[bytes]) -> None:
     except subprocess.TimeoutExpired:
         process.kill()
         process.wait(timeout=5)
-
-
-def command_body(health: dict[str, Any], key: str, command: str, **overrides: Any) -> dict[str, Any]:
-    """Build a well-formed command bound to the reported session and generation."""
-    body: dict[str, Any] = {
-        "idempotency_key": key,
-        "command": command,
-        "session_id": health["session_id"],
-        "context_generation": health["context_generation"],
-        "confirmed": True,
-    }
-    body.update(overrides)
-    for field in [name for name, value in overrides.items() if value is None]:
-        body.pop(field, None)
-    return body
 
 
 class ServiceTestCase(unittest.TestCase):

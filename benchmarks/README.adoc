@@ -22,7 +22,10 @@ separate benchmark envelope.
 ----
 python3 benchmarks/live.py --build-dir build/linux-release \
   --samples 40 --concurrency 12 --save build/benchmarks/live.json
+python3 benchmarks/run.py --binary build/linux-release/context-hmi-benchmark \
+  --save build/benchmarks/native.json
 python3 benchmarks/plot.py --live build/benchmarks/live.json \
+  --native build/benchmarks/native.json \
   --output build/benchmarks/context-hmi.svg
 ----
 

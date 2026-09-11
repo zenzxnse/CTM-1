@@ -54,6 +54,7 @@ export type MachineModel = {
 export type Task = {
   kind: string;
   anchor_asset_id?: string;
+  measurement_roles?: string[];
   model_revision: number;
   model_id?: string;
   original_request: string;
@@ -166,7 +167,9 @@ export type Interpretation = {
   prompt?: string;
   message?: string;
   supported_tasks?: string[];
-  candidates?: (string | { asset_id?: string; name?: string })[];
+  candidates?: (
+    string | { asset_id?: string; name?: string; kind?: string; score?: number; eligible?: boolean }
+  )[];
   task?: Task;
   view?: View;
   execution?: ExecutionInfo;

@@ -106,6 +106,20 @@ def wait_ready(base: str, timeout: float = 15.0) -> dict[str, Any]:
     raise RuntimeError(f"service did not become ready: {last}")
 
 
+def wait_service(base: str, timeout: float = 15.0) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    last: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        try:
+            status, last, _ = request_json(base, "/api/v1/health")
+            if status == 200:
+                return last
+        except OSError:
+            pass
+        time.sleep(0.05)
+    raise RuntimeError(f"service did not become healthy: {last}")
+
+
 def stop(process: subprocess.Popen[bytes]) -> None:
     if process.poll() is not None:
         return
@@ -193,10 +207,8 @@ def measure(options: argparse.Namespace) -> dict[str, Any]:
             stderr=subprocess.DEVNULL,
         )
         try:
+            wait_service(base)
             model_status, model_response, _ = request_json(base, "/api/v1/model")
-            if model_status != 200:
-                wait_ready(base)
-                model_status, model_response, _ = request_json(base, "/api/v1/model")
             if model_status != 200:
                 raise RuntimeError(f"model request failed: {model_response}")
             model = model_response.get("model", model_response)
@@ -214,6 +226,7 @@ def measure(options: argparse.Namespace) -> dict[str, Any]:
             if cold_status != 200 or cold_body.get("status") != "ready":
                 raise RuntimeError(f"cold interpretation failed: {cold_body}")
             warm: list[float] = []
+            latest_body = cold_body
             for _ in range(options.samples):
                 status, body, elapsed = request_json(
                     base, "/api/v1/interpret", {"prompt": prompt, "interpreter": "rules"}
@@ -221,15 +234,18 @@ def measure(options: argparse.Namespace) -> dict[str, Any]:
                 if status != 200 or body.get("status") != "ready":
                     raise RuntimeError(f"warm interpretation failed: {body}")
                 warm.append(elapsed)
-            view = cold_body.get("view")
+                latest_body = body
+            view = latest_body.get("view")
             if not isinstance(view, dict) or not isinstance(view.get("view_id"), str):
                 raise RuntimeError("interpretation did not return a canonical view")
             view_id = view["view_id"]
-            reconcile_status, _, reconcile_ms = request_json(
+            reconcile_status, reconcile_body, reconcile_ms = request_json(
                 base, "/api/v1/reconcile", {"view_id": view_id}
             )
             if reconcile_status != 200:
-                raise RuntimeError("reconciliation failed")
+                raise RuntimeError(
+                    f"reconciliation failed with HTTP {reconcile_status}: {reconcile_body}"
+                )
 
             def telemetry_request(_: int) -> tuple[int, float]:
                 status, _, elapsed = request_json(base, "/api/v1/telemetry")
@@ -282,7 +298,8 @@ def measure(options: argparse.Namespace) -> dict[str, Any]:
                 },
                 "interpretation": {
                     "status": cold_body.get("status"),
-                    "execution": cold_body.get("execution"),
+                    "cold_execution": cold_body.get("execution"),
+                    "warm_execution": latest_body.get("execution"),
                 },
                 "runtime_metrics": metrics,
                 "limitations": [

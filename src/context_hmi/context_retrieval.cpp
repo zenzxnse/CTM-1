@@ -1,6 +1,7 @@
 #include "context_hmi/context_retrieval.hpp"
 
 #include <algorithm>
+#include <iterator>
 #include <map>
 #include <set>
 #include <string>
@@ -18,6 +19,10 @@ namespace {
 using Terms = std::vector<std::string>;
 
 constexpr std::size_t kMaxPrompt = 8192;
+constexpr std::size_t kMinimumSerializedBytes = 1024;
+constexpr std::size_t kMaximumSerializedBytes = 65536;
+constexpr std::size_t kMinimumEstimatedTokens = 256;
+constexpr std::size_t kMaximumEstimatedTokens = 16384;
 
 bool ascii_alphanumeric(unsigned char character) {
   return (character >= 'a' && character <= 'z') ||
@@ -163,6 +168,16 @@ bool model_has_asset(const Json& model, const std::string& id) {
                      [&](const Json& asset) { return asset.at("id") == id; });
 }
 
+std::size_t estimated_tokens(std::size_t serialized_bytes) {
+  return (serialized_bytes + 3U) / 4U;
+}
+
+bool within_budget(const Json& value, const RetrievalLimits& limits) {
+  const std::size_t bytes = value.dump().size();
+  return bytes <= limits.max_serialized_bytes &&
+         estimated_tokens(bytes) <= limits.max_estimated_tokens;
+}
+
 }  /* namespace */
 
 Json retrieve(const Json& model, const std::string& prompt, const RetrievalLimits& limits) {
@@ -171,7 +186,11 @@ Json retrieve(const Json& model, const std::string& prompt, const RetrievalLimit
     throw DomainError("invalid_request", "retrieval prompt must be nonempty and bounded");
   }
   if (limits.candidates == 0 || limits.assets == 0 || limits.relationships == 0 ||
-      limits.tags == 0 || limits.alarms == 0) {
+      limits.tags == 0 || limits.alarms == 0 ||
+      limits.max_serialized_bytes < kMinimumSerializedBytes ||
+      limits.max_serialized_bytes > kMaximumSerializedBytes ||
+      limits.max_estimated_tokens < kMinimumEstimatedTokens ||
+      limits.max_estimated_tokens > kMaximumEstimatedTokens) {
     throw DomainError("invalid_request", "retrieval limits must be positive");
   }
 
@@ -257,6 +276,7 @@ Json retrieve(const Json& model, const std::string& prompt, const RetrievalLimit
 
   Json candidates = Json::array();
   Json eligible = Json::array();
+  std::vector<std::string> all_eligible_ids;
   std::unordered_set<std::string> scope_ids;
   for (const auto& item : scored) {
     if (candidates.size() >= limits.candidates) {
@@ -272,7 +292,15 @@ Json retrieve(const Json& model, const std::string& prompt, const RetrievalLimit
                               {"reasons", item.reasons}});
     if (is_eligible) {
       eligible.push_back(id);
+      all_eligible_ids.push_back(id);
       scope_ids.insert(id);
+    }
+  }
+  for (const auto& item : scored) {
+    if (item.score == eligibility_score &&
+        std::find(all_eligible_ids.begin(), all_eligible_ids.end(),
+                  item.asset->at("id").get<std::string>()) == all_eligible_ids.end()) {
+      all_eligible_ids.push_back(item.asset->at("id").get<std::string>());
     }
   }
 
@@ -301,12 +329,32 @@ Json retrieve(const Json& model, const std::string& prompt, const RetrievalLimit
     }
   }
 
-  Json assets = Json::array();
+  std::vector<std::string> ordered_scope_ids;
+  ordered_scope_ids.reserve(scope_ids.size());
+  for (const auto& id : eligible) {
+    ordered_scope_ids.push_back(id.get<std::string>());
+  }
   for (const auto& asset : model.at("assets")) {
-    if (!scope_ids.contains(asset.at("id").get<std::string>()) ||
-        assets.size() >= limits.assets) {
+    const auto id = asset.at("id").get<std::string>();
+    if (scope_ids.contains(id) &&
+        std::find(ordered_scope_ids.begin(), ordered_scope_ids.end(), id) ==
+            ordered_scope_ids.end()) {
+      ordered_scope_ids.push_back(id);
+    }
+  }
+
+  Json assets = Json::array();
+  for (const auto& id : ordered_scope_ids) {
+    if (assets.size() >= limits.assets) {
+      break;
+    }
+    const auto asset_location = std::find_if(
+        model.at("assets").begin(), model.at("assets").end(),
+        [&](const Json& asset) { return asset.at("id").get<std::string>() == id; });
+    if (asset_location == model.at("assets").end()) {
       continue;
     }
+    const auto& asset = *asset_location;
     Json compact{{"id", asset.at("id")},
                  {"name", asset.at("name")},
                  {"kind", asset.at("kind")}};
@@ -341,18 +389,45 @@ Json retrieve(const Json& model, const std::string& prompt, const RetrievalLimit
   }
   Json tags = Json::array();
   std::size_t relevant_tags = 0;
+  Json role_source_tags = Json::array();
   for (const auto& tag : model.at("tags")) {
     if (measurement_scope_ids.contains(tag.at("asset_id").get<std::string>())) {
       ++relevant_tags;
-      if (tags.size() < limits.tags) {
-        tags.push_back(Json{{"id", tag.at("id")},
-                            {"asset_id", tag.at("asset_id")},
-                            {"name", tag.at("name")},
-                            {"role", tag.at("role")},
-                            {"data_type", tag.at("data_type")},
-                            {"unit", tag.at("unit")}});
+      role_source_tags.push_back(tag);
+    }
+  }
+  auto role_hints = measurement_role_hints(role_source_tags, prompt_terms);
+  const std::size_t requested_role_count = role_hints.size();
+  std::vector<Json> ordered_tags;
+  ordered_tags.reserve(role_source_tags.size());
+  for (const auto& role : role_hints) {
+    for (const auto& tag : role_source_tags) {
+      if (tag.at("role") == role &&
+          std::none_of(ordered_tags.begin(), ordered_tags.end(), [&](const Json& item) {
+            return item.at("id") == tag.at("id");
+          })) {
+        ordered_tags.push_back(tag);
+        break;
       }
     }
+  }
+  for (const auto& tag : role_source_tags) {
+    if (std::none_of(ordered_tags.begin(), ordered_tags.end(), [&](const Json& item) {
+          return item.at("id") == tag.at("id");
+        })) {
+      ordered_tags.push_back(tag);
+    }
+  }
+  for (const auto& tag : ordered_tags) {
+    if (tags.size() >= limits.tags) {
+      break;
+    }
+    tags.push_back(Json{{"id", tag.at("id")},
+                        {"asset_id", tag.at("asset_id")},
+                        {"name", tag.at("name")},
+                        {"role", tag.at("role")},
+                        {"data_type", tag.at("data_type")},
+                        {"unit", tag.at("unit")}});
   }
 
   Json alarms = Json::array();
@@ -371,21 +446,23 @@ Json retrieve(const Json& model, const std::string& prompt, const RetrievalLimit
   }
 
   auto hints = task_hints(prompt_terms);
-  const auto role_hints = measurement_role_hints(tags, prompt_terms);
   if (hints.empty() && !role_hints.empty()) {
     hints.push_back("overview");
   }
-  const bool ambiguous = eligible.size() > 1U;
+  const bool eligible_truncated = all_eligible_ids.size() > eligible.size();
+  const bool ambiguous = all_eligible_ids.size() > 1U;
   const bool unresolved_reference = specific_reference && eligible.empty();
-  return Json{{"schema_version", "context-retrieval/1"},
+  Json result{{"schema_version", "context-retrieval/1"},
               {"model_id", model.at("model_id")},
               {"model_revision", model.at("revision")},
               {"prompt_terms", prompt_terms},
               {"task_hints", hints},
               {"measurement_role_hints", role_hints},
+              {"requested_measurement_role_count", requested_role_count},
               {"specific_asset_reference", specific_reference},
               {"requires_clarification", ambiguous || unresolved_reference},
               {"eligible_asset_ids", eligible},
+              {"eligible_asset_count", all_eligible_ids.size()},
               {"candidates", candidates},
               {"scope", Json{{"assets", assets},
                               {"relationships", relationships},
@@ -395,12 +472,112 @@ Json retrieve(const Json& model, const std::string& prompt, const RetrievalLimit
                               {"asset_limit", limits.assets},
                               {"relationship_limit", limits.relationships},
                               {"tag_limit", limits.tags},
-                              {"alarm_limit", limits.alarms}}},
-              {"truncated", Json{{"candidates", scored.size() > candidates.size()},
+                              {"alarm_limit", limits.alarms},
+                              {"serialized_byte_limit", limits.max_serialized_bytes},
+                              {"estimated_token_limit", limits.max_estimated_tokens}}},
+              {"truncated", Json{{"candidates", scored.size() > candidates.size() ||
+                                             eligible_truncated},
                                  {"assets", scope_truncated || scope_ids.size() > assets.size()},
                                  {"relationships", relevant_relationships > relationships.size()},
                                  {"tags", relevant_tags > tags.size()},
-                                 {"alarms", relevant_alarms > alarms.size()}}}};
+                                 {"alarms", relevant_alarms > alarms.size()},
+                                 {"measurement_roles", false},
+                                 {"serialized_bytes", false},
+                                 {"estimated_tokens", false}}}};
+
+  bool budget_truncated = false;
+  const auto budget_exceeded = [&]() {
+    result["candidates"] = candidates;
+    result["eligible_asset_ids"] = eligible;
+    result["scope"] = Json{{"assets", assets},
+                            {"relationships", relationships},
+                            {"tags", tags},
+                            {"alarms", alarms}};
+    return !within_budget(result, limits);
+  };
+  const auto remove_last_nonessential_candidate = [&]() {
+    for (auto item = candidates.rbegin(); item != candidates.rend(); ++item) {
+      if (!item->at("eligible").get<bool>()) {
+        candidates.erase(std::next(item).base());
+        result["truncated"]["candidates"] = true;
+        return true;
+      }
+    }
+    return false;
+  };
+  const auto remove_last_nonessential_asset = [&]() {
+    for (auto item = assets.rbegin(); item != assets.rend(); ++item) {
+      const auto id = item->at("id").get<std::string>();
+      if (std::find(eligible.begin(), eligible.end(), Json(id)) == eligible.end()) {
+        assets.erase(std::next(item).base());
+        result["truncated"]["assets"] = true;
+        return true;
+      }
+    }
+    return false;
+  };
+  while (budget_exceeded()) {
+    bool changed = remove_last_nonessential_candidate();
+    if (!changed) {
+      changed = remove_last_nonessential_asset();
+    }
+    if (!changed && !relationships.empty()) {
+      relationships.erase(std::prev(relationships.end()));
+      result["truncated"]["relationships"] = true;
+      changed = true;
+    }
+    if (!changed && !alarms.empty()) {
+      alarms.erase(std::prev(alarms.end()));
+      result["truncated"]["alarms"] = true;
+      changed = true;
+    }
+    if (!changed && tags.size() > role_hints.size()) {
+      tags.erase(std::prev(tags.end()));
+      result["truncated"]["tags"] = true;
+      changed = true;
+    }
+    if (!changed && !role_hints.empty()) {
+      role_hints.pop_back();
+      result["measurement_role_hints"] = role_hints;
+      result["requires_clarification"] = true;
+      result["truncated"]["measurement_roles"] = true;
+      changed = true;
+    }
+    if (!changed) {
+      for (auto& asset : assets) {
+        if (asset.contains("aliases")) {
+          asset.erase("aliases");
+          result["truncated"]["assets"] = true;
+          changed = true;
+          break;
+        }
+      }
+    }
+    if (!changed && !result.at("prompt_terms").empty()) {
+      result["prompt_terms"].erase(std::prev(result["prompt_terms"].end()));
+      changed = true;
+    }
+    if (!changed && !eligible.empty() && all_eligible_ids.size() > 1U) {
+      eligible.erase(std::prev(eligible.end()));
+      result["eligible_asset_ids"] = eligible;
+      changed = true;
+    }
+    if (!changed) {
+      throw DomainError("invalid_request", "retrieval budget is too small for declared identity");
+    }
+    budget_truncated = true;
+    result["truncated"]["serialized_bytes"] = true;
+    result["truncated"]["estimated_tokens"] = true;
+  }
+  result["candidates"] = std::move(candidates);
+  result["eligible_asset_ids"] = std::move(eligible);
+  result["scope"] = Json{{"assets", std::move(assets)},
+                          {"relationships", std::move(relationships)},
+                          {"tags", std::move(tags)},
+                          {"alarms", std::move(alarms)}};
+  result["truncated"]["serialized_bytes"] = budget_truncated;
+  result["truncated"]["estimated_tokens"] = budget_truncated;
+  return result;
 }
 
 void validate_interpretation_scope(const Json& model, const Json& retrieval,

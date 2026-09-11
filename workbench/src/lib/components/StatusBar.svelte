@@ -11,6 +11,7 @@
     feedLabel,
     feedStale,
     feedAge,
+    feedQuality,
     feedDisconnected,
     onReconnect
   }: {
@@ -23,6 +24,7 @@
     feedLabel: string;
     feedStale: boolean;
     feedAge: string;
+    feedQuality: string;
     feedDisconnected: boolean;
     onReconnect: () => void;
   } = $props();
@@ -60,7 +62,7 @@
   </div>
   <div class="status-chip">
     <span class="chip-label">Source</span>
-    <span class="chip-value">{sourceLabel}</span>
+    <span class="chip-value">{sourceLabel} · {feedQuality}</span>
   </div>
   <div class="status-chip">
     <span class="chip-label">Inference</span>
@@ -97,8 +99,7 @@
       class:state-good={!feedStale && !feedDisconnected}
       class:state-bad={feedDisconnected}
       class:state-warn={feedStale && !feedDisconnected}
-      >{feedDisconnected ? '■ Disconnected' : feedStale ? '▲ Delayed' : '● Live'},
-      {feedAge}</span
+      >{feedDisconnected ? '■ Disconnected' : feedStale ? '▲ Delayed' : `● ${feedLabel}`}, {feedAge}</span
     >
     {#if feedDisconnected}
       <button class="chip-button" onclick={onReconnect}>Reconnect feed</button>

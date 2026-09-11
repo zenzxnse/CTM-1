@@ -1,4 +1,5 @@
 ARG NODE_IMAGE=node:24.15.0-bookworm-slim
+ARG UBUNTU_IMAGE=ubuntu:24.04
 FROM ${NODE_IMAGE} AS workbench
 WORKDIR /workbench
 COPY workbench/package.json workbench/package-lock.json ./
@@ -6,7 +7,6 @@ RUN npm ci --ignore-scripts
 COPY workbench/ ./
 RUN npm run check && npm run build
 
-ARG UBUNTU_IMAGE=ubuntu:24.04
 FROM ${UBUNTU_IMAGE} AS build
 ARG TARGETARCH
 ARG CMAKE_VERSION=4.3.3

@@ -45,6 +45,13 @@ void register_task_routes(drogon::HttpAppFramework& app,
           return;
         }
         const auto prompt = body->at("prompt").get<std::string>();
+        if (prompt.empty() || prompt.size() > kMaximumPromptBytes) {
+          callback(json_response(
+              error_json("invalid_prompt",
+                         "prompt must be nonempty and at most 8192 bytes"),
+              400));
+          return;
+        }
         dispatch_json(runtime.cpu_workers(), std::move(callback),
                       [&runtime, prompt] {
                         return JsonResult{runtime.retrieve(prompt), 200};
@@ -138,7 +145,8 @@ void register_task_routes(drogon::HttpAppFramework& app,
         if (!body) {
           return;
         }
-        if (!body->contains("task") || !body->at("task").is_object()) {
+        if (body->size() != 1 || !body->contains("task") ||
+            !body->at("task").is_object()) {
           callback(json_response(
               error_json("invalid_task", "task must be an object"), 400));
           return;
@@ -146,11 +154,7 @@ void register_task_routes(drogon::HttpAppFramework& app,
         const auto task = body->at("task");
         dispatch_json(runtime.cpu_workers(), std::move(callback),
                       [&runtime, task] {
-                        try {
-                          return JsonResult{runtime.resolve(task), 200};
-                        } catch (const DomainError& error) {
-                          throw std::runtime_error(error.details);
-                        }
+                        return JsonResult{runtime.resolve(task), 200};
                       });
       },
       {drogon::Post});
@@ -167,7 +171,8 @@ void register_task_routes(drogon::HttpAppFramework& app,
           return;
         }
         Json supplied;
-        if (body->contains("view") && body->at("view").is_object()) {
+        if (body->contains("view") && body->at("view").is_object() &&
+            body->size() == 1) {
           supplied = body->at("view");
         } else if (body->contains("view_id") && body->size() == 1) {
           supplied = *body;
@@ -194,7 +199,8 @@ void register_task_routes(drogon::HttpAppFramework& app,
         if (!body) {
           return;
         }
-        if (!body->contains("id") || !body->at("id").is_string()) {
+        if (body->size() != 1 || !body->contains("id") ||
+            !body->at("id").is_string()) {
           callback(json_response(
               error_json("invalid_scenario", "scenario id is invalid"), 400));
           return;

@@ -64,8 +64,11 @@ bool origin_allowed(const drogon::HttpRequestPtr& request,
   if (origin.empty()) {
     return true;
   }
+  const auto host = options.host.find(':') == std::string::npos
+                        ? options.host
+                        : "[" + options.host + "]";
   const auto port = std::to_string(options.port);
-  return origin == "http://" + options.host + ":" + port ||
+  return origin == "http://" + host + ":" + port ||
          origin == "http://127.0.0.1:" + port ||
          origin == "http://localhost:" + port ||
          (!options.workbench_origin.empty() &&
@@ -198,7 +201,8 @@ int domain_status(const DomainError& error) {
   }
   if (error.code == "stale_context" || error.code == "lost_update" ||
       error.code == "idempotency_conflict" ||
-      error.code == "confirmation_required") {
+      error.code == "confirmation_required" ||
+      error.code == "stale_model_revision") {
     return 409;
   }
   if (error.code == "audit_unavailable") {
@@ -208,6 +212,9 @@ int domain_status(const DomainError& error) {
     return 422;
   }
   if (error.code == "invalid_command" || error.code == "invalid_scenario") {
+    return 400;
+  }
+  if (error.code == "invalid_request") {
     return 400;
   }
   return 422;

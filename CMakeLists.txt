@@ -87,6 +87,9 @@ add_library(
   context_hmi_core STATIC
   src/context_hmi/bounded_cache.cpp
   src/context_hmi/context_import.cpp
+  src/context_hmi/context_import_common.cpp
+  src/context_hmi/context_import_csv.cpp
+  src/context_hmi/context_import_records.cpp
   src/context_hmi/context_retrieval.cpp
   src/context_hmi/diagnostic_logger.cpp
   src/context_hmi/engine.cpp
@@ -120,7 +123,13 @@ add_executable(
   src/context_hmi/runtime_surface.cpp
   src/context_hmi/server.cpp
   src/context_hmi/inference.cpp
-  src/context_hmi/options.cpp)
+  src/context_hmi/inference_rules.cpp
+  src/context_hmi/inference_transport.cpp
+  src/context_hmi/inference_validation.cpp
+  src/context_hmi/options.cpp
+  src/context_hmi/options_cli.cpp
+  src/context_hmi/options_config.cpp
+  src/context_hmi/options_validation.cpp)
 target_link_libraries(
   context-hmi
   PRIVATE context_hmi::core context_hmi_project_options Drogon::Drogon Threads::Threads)
@@ -278,7 +287,9 @@ set(CPACK_GENERATOR "TGZ;ZIP")
 set(CPACK_SOURCE_GENERATOR "TGZ;ZIP")
 set(CPACK_SOURCE_IGNORE_FILES
     "/\\.git/;/build/;/build-[^/]*/;/cmake-build-[^/]*/;/dist/;/out/;/Testing/;"
+    "/\\.venv/;/\\.cache/;\\.egg-info/;/__pycache__/;/coverage/;"
     "/workbench/node_modules/;/workbench/\\.svelte-kit/;/workbench/build/;"
     "/adr/;assignment\\.md;rule\\.adoc;project-state\\.yaml;AGENTS\\.md;"
-    "CMakeUserPresets\\.json;context-hmi-handoff;/\\.env$;/models/;/runtime/")
+    "CMakeUserPresets\\.json;context-hmi-handoff;/\\.env($|\\.);/models/;/\\.runtime/;"
+    "credentials\\.json;secrets\\.ya?ml;\\.(key|p12|pfx|journal|log|tmp)$")
 include(CPack)

@@ -61,8 +61,9 @@ void dispatch_json(execution::WorkerPool& pool, ResponseCallback callback,
       } catch (const DomainError& error) {
         callback(json_response(error_json(error.code, error.details),
                                domain_status(error)));
-      } catch (const std::exception& error) {
-        callback(json_response(error_json("engine_error", error.what()), 422));
+      } catch (const std::exception&) {
+        callback(json_response(
+            error_json("engine_error", "request could not be processed"), 500));
       }
     });
   } catch (const execution::QueueFull& error) {

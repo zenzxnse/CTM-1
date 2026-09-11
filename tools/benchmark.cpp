@@ -276,11 +276,11 @@ int main(int argc, char **argv) {
             Json current_task = base_task;
             current_task["anchor_asset_id"] = current_retrieval.at("eligible_asset_ids").at(0);
             const Json current_view = resolve_task(base_model, current_task);
-            benchmark_guard = benchmark_guard ^ current_view.size();
+            benchmark_guard += current_view.size();
         });
         const auto reconcile_samples = measure(config, [&]() {
             const Json reconciled = context_hmi::reconcile_view(revision_model, previous_view);
-            benchmark_guard = benchmark_guard ^ reconciled.size();
+            benchmark_guard += reconciled.size();
         });
 
         const auto base_workload = workload_json(base_model, config.base_model);
@@ -315,7 +315,8 @@ int main(int argc, char **argv) {
                             {"guard", benchmark_guard},
                             {"counts_as_product_comparison", false},
                             {"excluded", Json::array({"GUI rendering", "llama.cpp inference",
-                                                      "PLC or OPC UA I/O", "network latency"})}}}};
+                                                      "external source-adapter I/O",
+                                                      "network latency"})}}}};
         std::cout << output.dump(2) << '\n';
         return 0;
     } catch (const std::exception &error) {
