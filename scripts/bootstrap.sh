@@ -14,7 +14,7 @@ load_local_environment() {
     name="${name%$'\r'}"
     value="${value%$'\r'}"
     case "$name" in
-      GROQ_API_KEY|GROQ_ENDPOINT|GROQ_MODEL|CONTEXT_HMI_INFERENCE|CONTEXT_HMI_PORT|CONTEXT_HMI_SEED_TELEMETRY|CONTEXT_HMI_STALE_AFTER_MS|CONTEXT_HMI_SKIP_BUILD|CONTEXT_HMI_OPEN_BROWSER)
+      GROQ_API_KEY|GROQ_ENDPOINT|GROQ_MODEL|GROQ_MAX_OUTPUT_TOKENS|CONTEXT_HMI_INFERENCE|CONTEXT_HMI_PORT|CONTEXT_HMI_SEED_TELEMETRY|CONTEXT_HMI_STALE_AFTER_MS|CONTEXT_HMI_SKIP_BUILD|CONTEXT_HMI_OPEN_BROWSER)
         if [[ "$value" == \"*\" && "$value" == *\" ]]; then
           value="${value:1:${#value}-2}"
         elif [[ "$value" == \'*\' && "$value" == *\' ]]; then
@@ -79,14 +79,21 @@ if [[ "$inference_mode" == "groq" ]]; then
   fi
   groq_endpoint="${GROQ_ENDPOINT:-https://api.groq.com/openai/v1/chat/completions}"
   groq_model="${GROQ_MODEL:-openai/gpt-oss-20b}"
+  groq_max_output_tokens="${GROQ_MAX_OUTPUT_TOKENS:-512}"
   if [[ "$groq_endpoint" != https://* ]]; then
     printf 'GROQ_ENDPOINT must use HTTPS.\n' >&2
+    exit 2
+  fi
+  if [[ ! "$groq_max_output_tokens" =~ ^[0-9]+$ ]] ||
+    (( groq_max_output_tokens < 64 || groq_max_output_tokens > 2048 )); then
+    printf 'GROQ_MAX_OUTPUT_TOKENS must be from 64 through 2048.\n' >&2
     exit 2
   fi
   build_preset="linux-release-tls"
   provider_arguments=(
     --provider-url "$groq_endpoint"
     --provider-model "$groq_model"
+    --provider-max-output-tokens "$groq_max_output_tokens"
     --provider-key-env GROQ_API_KEY
     --allow-remote-inference
   )

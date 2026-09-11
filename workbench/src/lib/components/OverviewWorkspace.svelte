@@ -121,7 +121,13 @@
           <dt>Equipment</dt>
           <dd><code>{view.task.anchor_asset_id || 'All declared equipment'}</code></dd>
           <dt>Interpreter</dt>
-          <dd>{viewInterpreter.startsWith('llama') ? 'Local AI' : 'Rules'}</dd>
+          <dd>
+            {viewInterpreter === 'rules'
+              ? 'Rules'
+              : viewInterpreter === 'openai-compatible'
+                ? 'Remote AI'
+                : 'Local AI'}
+          </dd>
           <dt>Model revision</dt>
           <dd>{view.model_revision}</dd>
         </dl>

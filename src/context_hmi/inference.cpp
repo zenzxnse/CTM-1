@@ -26,10 +26,10 @@ Json Inference::interpret(const Json& model, const std::string& prompt, const Js
     result["provider_usage"] = Json{{"reported", false}, {"provider_call", false}};
   } else if (mode == "llama" || mode == "llama.cpp") {
     if (!llama_) {
-      throw InferenceError("provider_unconfigured", "llama interpreter was not configured");
+      throw InferenceError("provider_unconfigured", "AI interpreter was not configured");
     }
     result = llama_->interpret(model, prompt, retrieval);
-    result["interpreter"] = "llama.cpp";
+    result["interpreter"] = llama_->name();
   } else {
     throw InferenceError("invalid_interpreter", "interpreter must be rules or llama");
   }
@@ -50,7 +50,7 @@ Json Inference::readiness() {
 }
 
 std::string Inference::mode() const {
-  return llama_ ? "llama.cpp" : "rules";
+  return llama_ ? llama_->name() : "rules";
 }
 
 }  /* namespace context_hmi */

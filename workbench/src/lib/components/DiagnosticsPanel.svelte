@@ -67,11 +67,13 @@
         <tr><td>Mode</td><td>{health ? humanize(health.mode) : 'Unknown'}</td></tr>
         <tr><td>Interpreter mode</td><td>{health?.interpreter ?? 'Unknown'}</td></tr>
         <tr>
-          <td>Local AI provider</td>
+          <td>AI provider</td>
           <td
             >{health
               ? health.llama_configured
-                ? 'Configured, llama.cpp'
+                ? health.interpreter === 'openai-compatible'
+                  ? 'Configured, remote OpenAI-compatible'
+                  : 'Configured, local llama.cpp'
                 : 'Not configured'
               : 'Unknown'}</td
           >

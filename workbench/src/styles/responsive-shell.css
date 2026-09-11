@@ -61,7 +61,8 @@
     border-right: 0;
     border-bottom: 1px solid var(--border);
     padding: 8px 12px;
-    background: #fafbfc;
+    background: linear-gradient(90deg, var(--ocean-deep), #073772);
+    box-shadow: inset 0 -4px 0 var(--blue);
   }
   .sidebar > .sidebar-heading,
   .sidebar-model,
@@ -79,7 +80,9 @@
     padding: 10px;
   }
   .sidebar nav button.active {
-    box-shadow: inset 0 -2px 0 var(--orange);
+    box-shadow:
+      inset 0 -3px 0 var(--blue),
+      0 3px 10px rgba(0, 16, 48, 0.2);
   }
   main {
     padding: 24px 17px 0;

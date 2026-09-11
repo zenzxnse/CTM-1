@@ -67,6 +67,7 @@ class LlamaInferenceProvider final : public InferenceProvider {
   int port_{0};
   bool tls_{false};
   bool loopback_{true};
+  bool groq_structured_profile_{false};
 };
 
 /** Selects one explicit provider and never converts provider failure into rules mode. */

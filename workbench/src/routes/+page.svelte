@@ -122,7 +122,9 @@
       detail: interpretation
         ? interpretation.interpreter === 'rules'
           ? 'Deterministic local rules'
-          : 'llama.cpp provider'
+          : interpretation.interpreter === 'openai-compatible'
+            ? 'Remote OpenAI-compatible provider'
+            : 'Local llama.cpp provider'
         : 'Bounded context is selected first'
     },
     {
@@ -324,6 +326,7 @@
       ]);
       reachable = true;
       health = serverHealth;
+      if (serverHealth.llama_configured) interpreter = 'llama';
       model = machineModel;
       scenarios = Array.isArray(availableScenarios.scenarios) ? availableScenarios.scenarios : [];
       currentScenario = serverHealth.active_scenario ?? scenarios[0]?.id ?? '';

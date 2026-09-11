@@ -178,6 +178,59 @@ Json provider_usage(const Json& response) {
   return result;
 }
 
+Json strict_groq_task_schema() {
+  return Json{
+      {"type", "object"},
+      {"additionalProperties", false},
+      {"properties",
+       Json{{"kind", Json{{"type", "string"}, {"enum", Json::array({"overview", "alarms"})}}},
+            {"anchor_asset_id",
+             Json{{"anyOf", Json::array({Json{{"type", "string"}}, Json{{"type", "null"}}})}}},
+            {"measurement_roles", Json{{"type", "array"}, {"items", Json{{"type", "string"}}}}},
+            {"model_revision", Json{{"type", "integer"}}},
+            {"model_id", Json{{"type", "string"}}}}},
+      {"required", Json::array({"kind", "anchor_asset_id", "measurement_roles", "model_revision",
+                                 "model_id"})}};
+}
+
+Json strict_groq_output_schema() {
+  return Json{
+      {"type", "object"},
+      {"additionalProperties", false},
+      {"properties",
+       Json{{"status",
+             Json{{"type", "string"}, {"enum", Json::array({"ready", "clarification"})}}},
+            {"message",
+             Json{{"anyOf", Json::array({Json{{"type", "string"}}, Json{{"type", "null"}}})}}},
+            {"candidates", Json{{"type", "array"}, {"items", Json{{"type", "string"}}}}},
+            {"task",
+             Json{{"anyOf", Json::array({strict_groq_task_schema(), Json{{"type", "null"}}})}}}}},
+      {"required", Json::array({"status", "message", "candidates", "task"})}};
+}
+
+void remove_null_placeholders(Json& proposed) {
+  if (!proposed.is_object()) {
+    return;
+  }
+  if (proposed.contains("message") && proposed.at("message").is_null()) {
+    proposed.erase("message");
+  }
+  if (proposed.contains("task") && proposed.at("task").is_null()) {
+    proposed.erase("task");
+  }
+  if (!proposed.contains("task") || !proposed.at("task").is_object()) {
+    return;
+  }
+  auto& task = proposed.at("task");
+  if (task.contains("anchor_asset_id") && task.at("anchor_asset_id").is_null()) {
+    task.erase("anchor_asset_id");
+  }
+  if (task.contains("measurement_roles") && task.at("measurement_roles").is_array() &&
+      task.at("measurement_roles").empty()) {
+    task.erase("measurement_roles");
+  }
+}
+
 Json parse_content(const Json& response) {
   if (!response.is_object() || !response.contains("choices") ||
       !response.at("choices").is_array() || response.at("choices").empty() ||
@@ -222,6 +275,9 @@ LlamaInferenceProvider::LlamaInferenceProvider(InferenceConfig config)
   port_ = parsed.port;
   tls_ = parsed.tls;
   loopback_ = parsed.loopback;
+  groq_structured_profile_ =
+      lower_ascii(host_) == "api.groq.com" &&
+      (config_.model == "openai/gpt-oss-20b" || config_.model == "openai/gpt-oss-120b");
   const std::string authority = host_.find(':') == std::string::npos ? host_ : "[" + host_ + "]";
   scheme_host_port_ = parsed.scheme + "://" + authority + ":" + std::to_string(port_);
   models_path_ = models_path_for(path_);
@@ -261,6 +317,9 @@ Json LlamaInferenceProvider::interpret(const Json& model, const std::string& pro
              Json{{"type", "array"}, {"items", Json{{"type", "string"}}}, {"maxItems", 32}}},
             {"task", task_schema}}},
       {"required", Json::array({"status"})}};
+  if (groq_structured_profile_) {
+    output_schema = strict_groq_output_schema();
+  }
   Json request = {
       {"model", config_.model},
       {"temperature", 0},
@@ -272,8 +331,10 @@ Json LlamaInferenceProvider::interpret(const Json& model, const std::string& pro
                  "Interpret the operator request using only the declared machine context. Return "
                  "JSON. For ready: status and task with kind, model_id, model_revision, "
                  "anchor_asset_id when a specific asset is requested, and measurement_roles "
-                 "only when the request names measurements. For "
+                 "only when the request names measurements. Set message to null and candidates "
+                 "to an empty array when those strict fields are required. For "
                  "clarification: status and message, optional candidate asset IDs, no task. "
+                 "Set task to null when that strict field is required. "
                  "Supported tasks are overview and alarms. Use clarification for "
                  "unknown equipment, multiple possible equipment identities, unsupported tasks "
                  "or requests to diagnose causes. Never invent equipment IDs, bindings or "
@@ -294,6 +355,12 @@ Json LlamaInferenceProvider::interpret(const Json& model, const std::string& pro
   };
   if (loopback_) {
     request["cache_prompt"] = true;
+  }
+  if (groq_structured_profile_) {
+    request.erase("max_tokens");
+    request["max_completion_tokens"] = config_.max_output_tokens;
+    request["reasoning_effort"] = "low";
+    request["response_format"]["json_schema"]["strict"] = true;
   }
   auto [result, response] =
       send_provider_request(scheme_host_port_, path_, config_, drogon::Post, request.dump());
@@ -317,6 +384,9 @@ Json LlamaInferenceProvider::interpret(const Json& model, const std::string& pro
       return true;
     });
     auto proposed = parse_content(decoded);
+    if (groq_structured_profile_) {
+      remove_null_placeholders(proposed);
+    }
     if (proposed.value("status", "") == "ready" && proposed.contains("task") &&
         proposed.at("task").is_object()) {
       proposed["task"]["original_request"] = prompt;

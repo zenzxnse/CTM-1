@@ -38,6 +38,11 @@
     'Show active alarms for the line'
   ];
   let promptLength = $derived(prompt.length);
+  let providerLabel = $derived(
+    health?.interpreter === 'openai-compatible'
+      ? 'Remote AI · OpenAI-compatible'
+      : 'Local AI · llama.cpp'
+  );
   let speechSupported = $state<boolean | null>(null);
   let speechActive = $state(false);
   let speechStatus = $state('');
@@ -160,7 +165,7 @@
         >
           <option value="rules">Rules · offline</option>
           <option value="llama" disabled={!health?.llama_configured}
-            >Local AI · llama.cpp{health?.llama_configured ? '' : ' (not configured)'}</option
+            >{providerLabel}{health?.llama_configured ? '' : ' (not configured)'}</option
           >
         </select>
       </div>
