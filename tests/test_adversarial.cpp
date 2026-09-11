@@ -24,15 +24,15 @@ template <typename Fn> void expects_domain_error(Fn &&fn, const std::string &mes
         fn();
         check(false, message + " (no DomainError)");
     } catch (const DomainError &) {
-        // Expected.
+        /* Expected. */
     } catch (const std::exception &error) {
         check(false, message + " (wrong exception: " + error.what() + ")");
     }
 }
 
 Json source(const std::string &identifier) {
-    return Json{{"server", "simulator"},
-                {"namespace_uri", "urn:context-hmi:simulator"},
+    return Json{{"server", "external-source"},
+                {"namespace_uri", "urn:context-hmi:source"},
                 {"identifier", identifier}};
 }
 
@@ -86,16 +86,16 @@ Json base_model() {
     };
 }
 
-Json filling_view(const Json &model) {
-    return context_hmi::resolve_task(model, Json{{"kind", "filling"},
+Json overview_view(const Json &model) {
+    return context_hmi::resolve_task(model, Json{{"kind", "overview"},
                                                  {"anchor_asset_id", "tank-a"},
                                                  {"model_revision", 1},
-                                                 {"original_request", "Show filling for Tank A"}});
+                                                 {"original_request", "Show overview for Tank A"}});
 }
 
 void same_id_tag_changes_are_conflicts() {
     const Json original = base_model();
-    const Json view = filling_view(original);
+    const Json view = overview_view(original);
 
     Json owner_changed = original;
     owner_changed["tags"][0]["asset_id"] = "tank-b";
@@ -119,7 +119,11 @@ void same_id_tag_changes_are_conflicts() {
 
 void same_id_relationship_changes_are_conflicts() {
     const Json original = base_model();
-    const Json view = filling_view(original);
+    Json view = overview_view(original);
+    view["components"][0]["relationship_id"] = "feed-1";
+    view["components"][0]["relationship_kind"] = "feeds";
+    view["components"][0]["relationship_from"] = "pump-a";
+    view["components"][0]["relationship_to"] = "tank-a";
     Json changed = original;
     changed["relationships"][0]["from"] = "pump-b";
     auto reconciled = context_hmi::reconcile_view(changed, view);
@@ -135,7 +139,7 @@ void same_id_relationship_changes_are_conflicts() {
 
 void repeated_reconcile_does_not_launder_conflict() {
     const Json original = base_model();
-    const Json view = filling_view(original);
+    const Json view = overview_view(original);
     Json changed = original;
     changed["tags"][0]["unit"] = "litres";
     const Json once = context_hmi::reconcile_view(changed, view);
@@ -149,7 +153,7 @@ void repeated_reconcile_does_not_launder_conflict() {
 
 void model_and_task_identity_are_bound() {
     const Json original = base_model();
-    const Json view = filling_view(original);
+    const Json view = overview_view(original);
     Json different_model = original;
     different_model["model_id"] = "m2";
     bool model_rejected = false;
@@ -162,21 +166,12 @@ void model_and_task_identity_are_bound() {
     }
     check(model_rejected, "a different model with the same revision cannot silently reconcile");
 
-    Json stale_task = Json{{"kind", "filling"},
+    Json stale_task = Json{{"kind", "overview"},
                            {"anchor_asset_id", "tank-a"},
                            {"model_revision", 999},
-                           {"original_request", "Show filling for Tank A"}};
+                           {"original_request", "Show overview for Tank A"}};
     expects_domain_error([&] { (void)context_hmi::resolve_task(original, stale_task); },
                          "a task from another revision is rejected");
-}
-
-void request_interpretation_does_not_guess_scope() {
-    const Json model = base_model();
-    auto unknown = context_hmi::interpret_request(model, "Show overview for the nonexistent tank");
-    check(unknown["status"] == "clarification", "unknown equipment remains clarification");
-
-    auto mixed = context_hmi::interpret_request(model, "Show filling overview for Tank A");
-    check(mixed["status"] == "clarification", "multiple task intents remain clarification");
 }
 
 void malformed_models_and_ids_are_rejected() {
@@ -211,7 +206,7 @@ void malformed_models_and_ids_are_rejected() {
 
 void client_dependencies_are_not_authority() {
     const Json model = base_model();
-    Json forged = filling_view(model);
+    Json forged = overview_view(model);
     check(forged.contains("dependencies") && !forged["dependencies"].empty(),
           "fixture has a dependency");
     forged["dependencies"][0]["owner"] = "attacker-asset";
@@ -222,14 +217,13 @@ void client_dependencies_are_not_authority() {
           "forged dependency metadata is detected instead of trusted");
 }
 
-} // namespace
+}  /* namespace */
 
 int main() {
     same_id_tag_changes_are_conflicts();
     same_id_relationship_changes_are_conflicts();
     repeated_reconcile_does_not_launder_conflict();
     model_and_task_identity_are_bound();
-    request_interpretation_does_not_guess_scope();
     malformed_models_and_ids_are_rejected();
     client_dependencies_are_not_authority();
     if (failures != 0)

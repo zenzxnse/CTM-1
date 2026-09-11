@@ -1,0 +1,65 @@
+= ADR 0015: Drogon asynchronous HTTP boundary
+
+Status:: Accepted
+Date:: 2026-09-11
+
+== Context
+
+The current inbound server and inference client use cpp-httplib. Request handlers wait on
+native worker futures, and each SSE connection holds a sleeping callback. This conflicts with
+the required asynchronous server boundary and makes slow providers or clients consume request
+threads. The native engine, `/api/v1` JSON contracts and SSE event shape must remain stable.
+
+== Decision
+
+Replace the inbound cpp-httplib server and outbound inference transport with Drogon 1.9.13,
+release commit `4c5430757ea5451a7c38fbbef4b4bef7dbb47f2f`, MIT licence. Build the pinned source with
+its Trantor submodule at commit `63a4e5e164e219dc3bf30cdbfa1462ae5602fa97`. Disable ORM,
+SQLite, PostgreSQL, MySQL, Redis, YAML configuration, Brotli, examples, tests and `drogon_ctl`.
+The application continues to use nlohmann JSON for its public contracts. Drogon's internal
+JsonCpp dependency does not change that selection.
+
+Drogon owns sockets and event loops. Handlers perform bounded validation on the request path,
+then complete callbacks after provider or native jobs finish. Native CPU jobs use the bounded
+worker pool. Drogon's asynchronous HTTP client performs llama.cpp and explicitly enabled
+OpenAI-compatible requests. No handler blocks an event loop on a future or network call.
+
+Keep every existing `/api/v1` route, status, error envelope, content-type rule, body limit,
+same-origin policy, security header and SSE event shape. Use `newAsyncStreamResponse` for SSE,
+one Drogon timer per admitted stream, and release the bounded client lease on disconnect.
+Use request advice for correlation, size and origin policy and response advice for security
+headers. Framework-generated 404, 405 and 413 responses use the same JSON error envelope.
+
+Sessions are server-side, bounded, same-site and used only for a local session identity.
+They do not establish production authentication. WebSockets are not introduced. A future
+WebSocket endpoint would require a separate contract and evidence that it improves an actual
+client need.
+
+== Dependency gate
+
+Problem:: Provide a maintained asynchronous cross-platform HTTP server, client, filters,
+sessions and nonblocking streams without implementing a network framework.
+Alternatives:: Retaining cpp-httplib cannot make its synchronous handler contract nonblocking.
+Boost.Beast requires substantial server, routing, stream and session infrastructure. oat++ and
+Crow would introduce a different framework without improving the accepted contracts.
+Platforms:: Upstream supports Linux and Windows. This project builds it from the pinned source
+for native Linux, native Windows and generic constrained Linux profiles. Runtime evidence is
+reported separately for each target.
+Pinning:: The exact commit and submodule commit are recorded above and in CMake. Release builds
+record resolved compiler and transitive package versions. No floating branch or tag is used.
+Upgrade:: Review release notes and advisories, update both commits, run all HTTP, provider,
+streaming, shutdown and packaging tests, then update this ADR.
+Removal:: The framework is isolated behind the service HTTP and provider transport translation
+units. Replacing it must preserve `/api/v1` and the inference-provider interface.
+
+== Consequences
+
+Slow inference and streams no longer require a request thread per operation. The release grows
+by Drogon, Trantor, JsonCpp and platform networking/TLS code. Drogon is not permitted to use an
+ORM or become an application persistence layer. The framed operational journal remains the only
+application durable store in this service.
+
+ADR 0002 and ADR 0004 remain accepted for local API, static workbench and inference behavior,
+but their cpp-httplib implementation choice is superseded by this record. The sentence in ADR
+0011 about completing socket responses on the request thread is superseded: callbacks may be
+completed from a worker, while Drogon alone retains socket ownership.

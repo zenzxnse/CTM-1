@@ -3,12 +3,19 @@
 Date:: 2026-09-10
 Status:: Accepted
 
+== Active-scope note
+
+This is a historical decision record. ADR 0015 supersedes the cpp-httplib
+implementation choice, and ADR 0017 supersedes the simulation and physical-source
+scope. The versioned API and explicit provider failure behavior remain historical
+inputs where they do not conflict with those later decisions.
+
 == Context
 
 PS2 needs a small local service that can expose the declared machine model to the
 Svelte workbench, produce simulated telemetry, and optionally ask a local
-llama.cpp HTTP server to interpret an operator request. The service is a
-prototype. It must not expose a physical command path or silently present a
+llama.cpp HTTP server to interpret an operator request. The earlier service must
+not expose a physical command path or silently present a
 rule-based answer as an AI answer.
 
 == Decision
@@ -62,7 +69,7 @@ telemetry stream with at most three clients, not a durable event log.
 The service is easy to run locally and the workbench can use same-origin API
 calls. The explicit provider boundary makes AI availability and failures
 visible. HTTP and JSON limits reduce accidental resource exhaustion, while the
-prototype remains intentionally unauthenticated and should stay on a trusted
+service remains intentionally unauthenticated and should stay on a trusted
 local interface unless remote binding is a deliberate operator choice.
 
 The model and provider behavior is covered by local native and integration tests.
@@ -71,4 +78,4 @@ llama.cpp server, or AI model has been tested.
 
 The llama request timeout defaults to 5 seconds and can be bounded explicitly
 with `--llama-timeout-ms` (100 to 30000 ms). Request duration is an observed
-local service measurement; the prototype does not promise real-time inference.
+local service measurement; the service does not promise real-time inference.

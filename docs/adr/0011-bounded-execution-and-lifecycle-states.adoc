@@ -1,0 +1,43 @@
+= ADR 0011: Bounded execution and lifecycle states
+
+Status:: Accepted
+Date:: 2026-09-11
+
+== Active-scope note
+
+The bounded scheduling and lifecycle rules remain active. ADR 0017 supersedes
+references to a simulator as the active telemetry source.
+
+== Context
+
+The service currently keeps HTTP routing, active model state, simulation, command handling and
+provider calls in one translation unit. Inference concurrency is counted, but CPU work has no
+shared scheduling contract and component state is represented by unrelated booleans. The product
+needs explicit backpressure and understandable shutdown and degradation states.
+
+== Decision
+
+Split lifecycle, scheduling, operational storage, diagnostic logging and context retrieval into
+separate namespaces and translation units. Use explicit finite-state machines for service, source,
+provider and store lifecycles. Every transition is checked against a table. Illegal transitions are
+errors, not implicit assignments.
+
+Use one bounded data-parallel worker pool for CPU work. Concurrent HTTP requests form the batch;
+workers execute jobs independently while socket response ownership remains on the request thread.
+Submission fails immediately when the queue is full. Shutdown stops admission, completes admitted
+jobs and joins all workers. A C++20 coroutine task type is the asynchronous job contract and owns
+its coroutine handle through RAII. Exceptions cross the future boundary.
+
+Do not use busy polling. The worker queue waits on condition variables. The simulator uses a timed
+condition-variable wait and can be stopped immediately. Do not move blocking provider HTTP calls
+onto the CPU pool; provider concurrency and timeouts remain independently bounded.
+
+== Consequences
+
+The service exposes queue depth, capacity and lifecycle states for diagnostics. CPU-heavy native
+resolution cannot create unbounded threads. Coroutines express job lifetime, but do not make the
+synchronous HTTP library asynchronous and do not imply lower latency. Measurements decide whether
+additional batching or parallel algorithms are useful.
+
+The pool is infrastructure, not authority. It cannot reorder command intent and durable result
+records, and no physical control operation is introduced.

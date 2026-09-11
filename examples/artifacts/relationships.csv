@@ -1,0 +1,6 @@
+id,from,to,kind
+line-has-conveyor,line-a,conveyor-a1,contains
+line-has-oven,line-a,oven-a1,contains
+line-has-inspection,line-a,inspection-a1,contains
+conveyor-to-oven,conveyor-a1,oven-a1,feeds
+oven-to-inspection,oven-a1,inspection-a1,feeds

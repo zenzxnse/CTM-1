@@ -1,0 +1,81 @@
+name: verify
+
+on:
+  push:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: workbench/package-lock.json
+      - name: Install native tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libjsoncpp-dev ninja-build uuid-dev zlib1g-dev
+          python -m pip install cmake==4.0.3
+      - name: Verify workbench
+        run: |
+          npm --prefix workbench ci
+          npm --prefix workbench run check
+          npm --prefix workbench run format:check
+          npm --prefix workbench run build
+      - name: Build and test native release
+        run: |
+          cmake --preset release
+          cmake --build --preset release
+          ctest --preset release
+      - name: Package Linux release
+        run: cpack --preset release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: context-hmi-linux-x86_64
+          path: |
+            build/linux-release/context-hmi-*.tar.gz
+            build/linux-release/context-hmi-*.zip
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install CMake and Ninja
+        shell: pwsh
+        run: python -m pip install cmake==4.0.3 ninja
+      - name: Install native libraries
+        shell: pwsh
+        run: vcpkg install jsoncpp:x64-windows-static zlib:x64-windows-static
+      - name: Configure Windows Server release
+        shell: pwsh
+        run: >-
+          cmake --preset windows-server-release
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+          -DVCPKG_TARGET_TRIPLET=x64-windows-static
+      - name: Build and test Windows Server release
+        shell: pwsh
+        run: |
+          cmake --build --preset windows-server-release
+          ctest --preset windows-server-release
+      - name: Package Windows release
+        shell: pwsh
+        run: cpack --preset windows-server-release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: context-hmi-windows-server-x86_64
+          path: build/windows-server-release/context-hmi-*.zip
+          if-no-files-found: error

@@ -1,8 +1,11 @@
 [project]
 name = "context-hmi-tools"
-version = "0.1.0"
-description = "Verification and benchmark tools for the native Context HMI prototype"
+version = "0.3.0"
+description = "Verification and benchmark tools for the native Context HMI runtime"
 requires-python = ">=3.11"
+
+[project.optional-dependencies]
+benchmark = ["matplotlib==3.11.1"]
 
 [tool.ruff]
 line-length = 100

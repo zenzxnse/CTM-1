@@ -1,0 +1,34 @@
+= ADR 0005: Portable build and release profiles
+
+Status:: Accepted
+Date:: 2026-09-11
+
+== Context
+
+The release must produce reproducible Linux and Windows artifacts from CMake 4.x while
+remaining small enough for a constrained Linux display host. Previous presets covered only
+the local host and did not package, cross-compile, harden, or guard test registration.
+
+== Decision
+
+Require CMake 4.0 or newer and C++20. Maintain named Debug, Release, sanitizer, constrained
+Linux, native Windows, and MinGW Windows cross-build profiles. A preset establishes a build
+profile, not operating-system certification. Windows desktop and Windows Server use the same
+native executable contract. Runtime claims require execution on each named target.
+
+Apply warnings to every first-party C++ target and support an opt-in warnings-as-errors gate.
+Release builds enable compiler and linker hardening where the platform supports it. Sanitizers
+remain a separate developer profile. The constrained profile removes benchmark and test
+artifacts from the runtime package and uses compile-time resource defaults without changing
+the API contract.
+
+CMake owns install layout, component packaging, source packaging and a guard that rejects any
+`tests/test_*.cpp` or `tests/test_*.py` source not explicitly registered. Cross builds do not
+execute target binaries. Generated files stay under `build/` or `dist/`.
+
+== Consequences
+
+The build definition is explicit and automation-friendly. CMake 3.x users must upgrade.
+MinGW compilation can find Windows-specific issues, but only a native Windows run establishes
+runtime support. A TCL Linux display is treated as a constrained generic Linux deployment
+profile until the exact TCL device, CPU, ABI, compositor and installation mechanism are known.

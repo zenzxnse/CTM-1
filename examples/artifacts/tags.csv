@@ -1,0 +1,9 @@
+id,asset_id,name,role,data_type,unit,server,namespace_uri,identifier
+line-a.state,line-a,Operating state,operating_state,boolean,,plant-broker,urn:factory:assembly,LineA.Running
+line-a.throughput,line-a,Throughput,throughput,number,parts/min,plant-broker,urn:factory:assembly,LineA.Throughput
+conveyor-a1.speed,conveyor-a1,Belt speed,speed,number,m/min,plant-broker,urn:factory:assembly,LineA.Infeed.Speed
+conveyor-a1.load,conveyor-a1,Motor load,motor_load,number,%,plant-broker,urn:factory:assembly,LineA.Infeed.Load
+oven-a1.temperature,oven-a1,Process temperature,temperature,number,degC,plant-broker,urn:factory:assembly,LineA.Oven.Temperature
+oven-a1.setpoint,oven-a1,Temperature setpoint,temperature_setpoint,number,degC,plant-broker,urn:factory:assembly,LineA.Oven.Setpoint
+inspection-a1.reject-rate,inspection-a1,Reject rate,reject_rate,number,%,plant-broker,urn:factory:assembly,LineA.Inspection.RejectRate
+inspection-a1.state,inspection-a1,Inspection available,status,boolean,,plant-broker,urn:factory:assembly,LineA.Inspection.Available

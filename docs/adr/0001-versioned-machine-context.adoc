@@ -3,9 +3,15 @@
 Date:: 2026-09-10
 Status:: Accepted
 
+== Active-scope note
+
+This is a historical decision record. ADR 0017 supersedes its deterministic
+simulation-telemetry details for the active standalone release; the identity,
+revision, validation and reconciliation rules remain applicable.
+
 == Context
 
-The prototype creates operator views from a declared machine model. Asset identity,
+The service creates operator views from a declared machine model. Asset identity,
 tag ownership, units, source references, and relationships must remain inspectable when
 the model changes. A revision number alone cannot establish that two models describe the
 same machine.
@@ -28,7 +34,7 @@ reconciliation. Session, view, and binding state are not persistent.
 
 The initial interpreter is explicitly labelled `rules` and supports filling, overview, and
 alarms. Unit text is retained as declared metadata and compared on reconciliation; this
-prototype does not claim dimensional conversion or physical unit ontology validation.
+The service does not claim dimensional conversion or physical unit ontology validation.
 Telemetry is deterministic simulation data bounded by tag type and does not issue physical
 equipment commands.
 

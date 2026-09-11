@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hmisol.local/schemas/vendor-context.schema.json",
+  "title": "Context HMI vendor-neutral import envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source", "mapping", "unresolved", "model"],
+  "properties": {
+    "schema_version": {"const": "vendor-context/1"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vendor", "product", "product_version", "export_format", "synthetic", "read_only", "artifact_sha256"],
+      "properties": {
+        "vendor": {"type": "string", "minLength": 1, "maxLength": 256},
+        "product": {"type": "string", "minLength": 1, "maxLength": 256},
+        "product_version": {"type": "string", "minLength": 1, "maxLength": 128},
+        "export_format": {"type": "string", "minLength": 1, "maxLength": 256},
+        "synthetic": {"type": "boolean"},
+        "read_only": {"const": true},
+        "artifact_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
+    "mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity_policy", "ownership_policy", "relationship_policy", "decisions"],
+      "properties": {
+        "identity_policy": {"const": "explicit-reviewed-id"},
+        "ownership_policy": {"const": "declared-only"},
+        "relationship_policy": {"const": "declared-only"},
+        "decisions": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source_id", "target_id", "evidence"],
+            "properties": {
+              "source_id": {"type": "string", "minLength": 1, "maxLength": 256},
+              "target_id": {"type": "string", "minLength": 1, "maxLength": 256},
+              "evidence": {"type": "string", "minLength": 1, "maxLength": 1024}
+            }
+          }
+        }
+      }
+    },
+    "unresolved": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "path", "message", "severity"],
+        "properties": {
+          "code": {"type": "string", "minLength": 1, "maxLength": 128},
+          "path": {"type": "string", "minLength": 1, "maxLength": 512},
+          "message": {"type": "string", "minLength": 1, "maxLength": 2048},
+          "severity": {"enum": ["info", "warning", "error"]}
+        }
+      }
+    },
+    "model": {"type": "object"}
+  }
+}

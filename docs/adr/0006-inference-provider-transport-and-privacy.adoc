@@ -1,0 +1,36 @@
+= ADR 0006: Inference provider transport and privacy
+
+Status:: Accepted
+Date:: 2026-09-11
+
+== Context
+
+The rules path is deterministic and the current llama.cpp path has only mock-server evidence.
+The user may optionally supply a Groq key. Plant context, credentials and command authority
+must not leak through an inference convenience feature.
+
+== Decision
+
+Keep rules as an always-available explicit provider. Support llama.cpp through its local
+OpenAI-compatible chat endpoint and probe `/v1/models` for readiness. Pin the interoperable
+request shape to the inspected llama.cpp server documentation and continue validating every
+response in native code because upstream does not claim complete OpenAI API compatibility.
+
+The provider configuration names endpoint, model alias, timeout and context limits. Loopback
+HTTP is allowed for local llama.cpp. Remote inference is disabled by default. A Groq profile
+may use `https://api.groq.com/openai/v1/chat/completions` only when TLS support is compiled,
+the operator explicitly enables remote inference, and the key is read from `GROQ_API_KEY`.
+The service never writes or echoes that key. Remote requests use the same bounded task schema,
+send no protocol addresses or credentials, and remain subject to local semantic validation.
+Production plant data requires a separate privacy approval before any cloud profile is used.
+
+Provider liveness is separate from service and telemetry readiness. Provider failure never
+stops existing views or telemetry and never silently changes provider mode. No provider can
+create a source binding, permission, command, interlock or alarm decision.
+
+== Consequences
+
+Local llama.cpp can be exercised without a cloud key. Groq is an optional interoperability
+profile, not the default architecture. TLS adds an optional OpenSSL build dependency and
+requires target packaging work. Model weights, model choice, chat template and interpretation
+quality must be recorded for each real inference run.

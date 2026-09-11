@@ -1,0 +1,18 @@
+{
+  "schema_version": "context-hmi-telemetry/1",
+  "model_id": "assembly-line-a",
+  "model_revision": 1,
+  "context_generation": 0,
+  "source_id": "plant-broker",
+  "sequence": 1,
+  "values": {
+    "line-a.state": {"value": true, "quality": "good", "timestamp_ms": 0},
+    "line-a.throughput": {"value": 42.0, "quality": "good", "timestamp_ms": 0},
+    "conveyor-a1.speed": {"value": 18.4, "quality": "good", "timestamp_ms": 0},
+    "conveyor-a1.load": {"value": 61.0, "quality": "good", "timestamp_ms": 0},
+    "oven-a1.temperature": {"value": 188.5, "quality": "good", "timestamp_ms": 0},
+    "oven-a1.setpoint": {"value": 190.0, "quality": "good", "timestamp_ms": 0},
+    "inspection-a1.reject-rate": {"value": 1.7, "quality": "good", "timestamp_ms": 0},
+    "inspection-a1.state": {"value": true, "quality": "good", "timestamp_ms": 0}
+  }
+}

@@ -1,0 +1,23 @@
+= Operator workflow
+
+Status:: Specified active workflow
+Date:: 2026-09-11
+
+. Import reviewed engineering artifacts, inspect provenance and unresolved fields,
+  then start the service with the resulting machine model.
+. Ingest a current telemetry batch from the source system.
+. Enter or dictate a request in the SvelteKit workbench.
+. Inspect retrieved candidates, context size, exclusions and cache status.
+. Accept the finite interpreted task only after the native validation evidence is
+  clear. Ambiguous requests remain clarification states.
+. Inspect the generated server-owned view, values, quality, freshness and bindings.
+. Replace the model with a reviewed revision and inspect reconciliation issues.
+. Restore telemetry ingestion independently if inference becomes unavailable.
+
+Each request composes a new declarative screen from the relevant model subgraph and
+task. The responsive layout metadata lets a client render the same view across
+different display sizes without a predesigned screen set.
+
+External dictation is merely text input to the same request field. It does not grant
+speech-driven control authority. No client generates executable UI code or receives
+controller credentials.

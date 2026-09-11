@@ -1,0 +1,49 @@
+ARG NODE_IMAGE=node:24.15.0-bookworm-slim
+FROM ${NODE_IMAGE} AS workbench
+WORKDIR /workbench
+COPY workbench/package.json workbench/package-lock.json ./
+RUN npm ci --ignore-scripts
+COPY workbench/ ./
+RUN npm run check && npm run build
+
+ARG UBUNTU_IMAGE=ubuntu:24.04
+FROM ${UBUNTU_IMAGE} AS build
+ARG CMAKE_VERSION=4.3.3
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+       ca-certificates curl g++-mingw-w64-x86-64-posix git \
+       libz-mingw-w64-dev ninja-build \
+    && curl --fail --location --silent --show-error \
+       "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz" \
+       --output /tmp/cmake.tar.gz \
+    && echo "927b2368a946c37269c3a66225ab00544e756459cdd0b5d0da438694fb9ff802  /tmp/cmake.tar.gz" \
+       | sha256sum --check --strict \
+    && mkdir -p /opt/cmake \
+    && tar --extract --gzip --file /tmp/cmake.tar.gz --directory /opt/cmake --strip-components=1 \
+    && rm /tmp/cmake.tar.gz \
+    && rm -rf /var/lib/apt/lists/*
+ENV PATH=/opt/cmake/bin:${PATH}
+WORKDIR /src
+COPY . .
+COPY --from=workbench /workbench/build /src/workbench/build
+RUN git clone --filter=blob:none https://github.com/open-source-parsers/jsoncpp.git /tmp/jsoncpp \
+    && git -C /tmp/jsoncpp checkout --detach 89e2973c754a9c02a49974d839779b151e95afd6 \
+    && cmake -S /tmp/jsoncpp -B /tmp/jsoncpp-build -G Ninja \
+       -DCMAKE_TOOLCHAIN_FILE=/src/cmake/toolchains/mingw-w64-x86_64.cmake \
+       -DCMAKE_BUILD_TYPE=Release \
+       -DCMAKE_INSTALL_PREFIX=/usr/x86_64-w64-mingw32 \
+       -DBUILD_SHARED_LIBS=OFF \
+       -DJSONCPP_WITH_TESTS=OFF \
+       -DJSONCPP_WITH_POST_BUILD_UNITTEST=OFF \
+       -DJSONCPP_WITH_PKGCONFIG_SUPPORT=OFF \
+    && cmake --build /tmp/jsoncpp-build --parallel 2 \
+    && cmake --install /tmp/jsoncpp-build \
+    && rm -rf /tmp/jsoncpp /tmp/jsoncpp-build
+RUN cmake --preset windows-mingw-release \
+    && cmake --build --preset windows-mingw-release \
+    && cmake --install build/windows-mingw-release \
+    && cpack --preset windows-mingw-release
+
+FROM scratch AS export
+COPY --from=build /src/dist/windows-mingw/ /
+COPY --from=build /src/build/windows-mingw-release/*.zip /packages/

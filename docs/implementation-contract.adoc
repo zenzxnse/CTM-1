@@ -1,135 +1,68 @@
-= Prototype implementation contract
+= Standalone implementation contract
 
-Status:: Accepted for the first implementation. Names below are shared by the native core,
-HTTP service and workbench. This file describes interfaces, not completed features.
-
-Date:: 2026-09-10
+Status:: Accepted active contract
+Date:: 2026-09-11
 
 == Scope
 
-PS2: interpret a supported operator task using declared machine context, generate a view,
-and reconcile that view after a model change. Run locally with a C++20 service and a
-SvelteKit workbench. Simulated equipment is the default. AI is an explicit optional
-llama.cpp provider; the deterministic request interpreter is labelled as rule-based.
-No physical equipment commands or production authentication in this prototype.
+The service loads a reviewed machine model, ingests current external telemetry,
+interprets bounded operator requests, composes declarative views and reconciles
+those views after model revisions. Rules are always available. llama.cpp and
+OpenAI-compatible providers are explicit options. The LLM proposes only a finite
+task; native code owns all identity, binding, validation and permission decisions.
 
-== Native interface
+== Model envelope
 
-Namespace: context_hmi. Dependency: nlohmann::json, alias Json.
-Core files: src/context_hmi/engine.hpp and engine.cpp.
-Core functions:
+The model contains `model_id`, non-negative `revision`, `name`, `assets`,
+`relationships`, `tags` and `alarms`. Every asset and tag has a stable declared
+identity. Every tag names its owning asset, role, type, unit and source reference.
+Relationships and alarm ownership are explicit. Names, paths and source addresses
+are not proof of ownership. Semantic same-ID changes are conflicts during
+reconciliation.
 
-[source,cpp]
-----
-Json validate_model(const Json& model);
-Json interpret_request(const Json& model, const std::string& prompt);
-Json resolve_task(const Json& model, const Json& task);
-Json reconcile_view(const Json& model, const Json& previous_view);
-Json make_telemetry(const Json& model, std::uint64_t tick, bool running);
-----
+== Telemetry envelope
 
-DomainError exposes std::string code and details through its message. Core must not own
-HTTP, UI, mutable global state or filesystem persistence. Validation failure throws;
-ordinary missing or ambiguous request context returns a structured result.
-
-== Model
-
-[source,json]
-----
-{
-  "model_id": "pump-station", "revision": 1, "name": "Pump station",
-  "assets": [{"id":"tank-3","name":"Tank 3","kind":"tank","aliases":["third tank"]}],
-  "relationships": [{"id":"feed-1","from":"pump-1","to":"tank-3","kind":"feeds"}],
-  "tags": [{"id":"tank-3.level","asset_id":"tank-3","name":"Level", "role":"level",
-    "data_type":"number","unit":"%","source":{"server":"simulator",
-    "namespace_uri":"urn:context-hmi:simulator","identifier":"Tank3.Level"}}],
-  "alarms": [{"id":"tank-3.high-level","asset_id":"tank-3","name":"High level",
-    "tag_id":"tank-3.level","operator":">=","threshold":90,"severity":"high"}]
-}
-----
-
-Asset IDs are explicit model identities. Connections are declared, never guessed from
-names or folder hierarchy. Source references and asset identities are distinct.
-All tags belong to a known asset; references must resolve. Input and cardinality limits
-must be enforced. A model revision changes metadata, not ordinary telemetry values.
+`POST /api/v1/telemetry` receives `context-hmi-telemetry/1` with model identity,
+revision, context generation, source ID, sequence and bounded tag values. Each value
+carries its value, quality and unsigned source timestamp in milliseconds; its declared
+type comes from the matching model tag. The service atomically validates and replaces
+the current batch. It marks stale values from receive age and preserves unknown values
+for missing tags.
 
 == Task and view
 
-Tasks supported initially: filling, overview, alarms. Resolve equipment aliases against
-the model. Prompt ambiguity returns status=clarification with message and candidates.
+Tasks contain a supported finite `kind`, model identity and revision, original
+request and optional anchor asset. Retrieval evidence precedes interpretation and
+contains candidates, reasons, direct relationships, owned tags, alarms, byte size,
+estimated tokens and truncation. A view contains a server-generated `view_id`, task,
+catalog components, resolved bindings, live values, issues and dependency
+fingerprints. Clients render the contract and never execute generated source.
+Components are selected from the task and retrieved context at request time. The
+view also carries responsive layout metadata so a client can adapt the same screen
+contract across display sizes without relying on a predesigned screen set.
 
-[source,json]
-----
-{"status":"ready","task":{"kind":"filling","anchor_asset_id":"tank-3",
-"model_revision":1,"original_request":"Show filling view for Tank 3"},"interpreter":"rules"}
-----
+== Provider contract
 
-resolve_task receives the inner task. A view:
+Providers receive static instructions and the output schema before bounded variable
+context and the operator request. A provider response must be a typed ready task or
+clarification. Native validation rejects unknown properties, unsupported kinds,
+model mismatch, stale generation and selections outside retrieved candidates.
+Provider usage is optional and must be surfaced as unavailable when absent.
 
-[source,json]
-----
-{"view_id":"view-tank-3-filling","model_revision":1,"status":"ready",
- "title":"Tank 3 - Filling","task":{},"components":[
-  {"id":"tank-3.level","kind":"gauge","label":"Tank 3 level","asset_id":"tank-3",
-   "tag_id":"tank-3.level","role":"level","unit":"%","reason":"Tank level during filling"}
- ],"issues":[],"dependencies":[]}
-----
+== HTTP routes
 
-Component kinds: gauge, value, status, alarm. The filling task includes level and declared
-feeding equipment with flow and operating state. It must explicitly identify missing
-required context. Alarm components identify alarm_id and tag_id. Dependencies retain
-tag ID, owner, role, units and source reference. A same-ID meaning change is a conflict,
-not silent rebinding. Removed data produces unavailable or needs-review state.
-Reconciliation preserves the original task and reports changes. It must not manufacture
-a replacement relationship. A freshly requested view may use the revised declared model.
+All routes are under `/api/v1`: `GET /health`, `GET /session`, `GET /ready`,
+`GET /model`, `GET /catalog`, `GET /scenarios`, `GET /metrics`, `GET /audit`,
+`GET /records`, `GET /telemetry`, `GET /events`, `POST /context/retrieve`,
+`POST /telemetry`, `POST /interpret`, `POST /resolve`, `POST /reconcile` and
+`POST /scenario`. Errors use the stable
+`{error:{code,message}}` envelope. Bodies, depth, prompts, telemetry, provider
+concurrency, streams and caches are bounded.
 
-The native server publishes a canonical view after successful `/interpret` or `/resolve`.
-It adds a server-generated `view_id`, the process `session_id`, and the current
-`context_generation`. The canonical view is held in an in-memory authoritative cache of at
-most 64 views. The cache and session are process local; there is no persistent view or
-session state. Reconciliation reads the canonical view by `view_id`, rejects an unknown
-ID, and rejects a supplied full view that differs from the cached value. A successful
-reconciliation updates the cached canonical view while preserving its `view_id`.
+== Clients and safety
 
-== HTTP API
-
-Local service listens on 127.0.0.1:8080 by default. All routes below are under /api/v1.
-
-* GET /health: version, interpreter mode, simulation mode, active scenario, session,
-  context generation and simulator state.
-* GET /model: active model with session_id and context_generation.
-* GET /scenarios: scenarios with file id, model_id, revision, name and description.
-* POST /interpret: {prompt, interpreter?} -> interpretation and optional view.
-* POST /resolve: {task} -> view.
-* POST /reconcile: {view:{...}} or {view_id} -> reconciled canonical view.
-* POST /scenario: {id} -> new model, resetting the simulator tick and incrementing
-  context_generation.
-* GET /telemetry: snapshot {model_id,model_revision,tick,quality,values,alarms,
-  session_id,context_generation}.
-* GET /events: server-sent events for bounded current-value telemetry snapshots.
-* POST /simulation: {running:boolean} -> simulator state.
-
-`/health` also reports `active_scenario`, `session_id`, `context_generation`, and
-`simulation_running`. A model snapshot and its generation are copied before provider or
-core work. If a scenario change is observed before a view is published or reconciled, the
-server returns `stale_context` with HTTP 409. Reconciliation returns `unknown_view` or
-`view_tampered` with HTTP 422 for cache lookup or canonical-content failures, and
-`lost_update` with HTTP 409 if the cached view changed during the update.
-
-Error envelope: {error:{code,message}}. No stack traces or internal credentials.
-Requests are JSON over HTTP. SSE supplies current telemetry, not a durable event log.
-No command path to physical PLCs is exposed. Simulation pause is a laboratory control.
-The server enforces a 64 KiB mutation body limit, JSON depth 32, prompt limits, provider
-timeout, known routes and strict task validation. The model loader also caps model files
-at 1 MiB. Bind loopback by default and reject unsupported cross-origin mutations.
-`--allow-remote` changes the bind policy, not the authentication model.
-
-== Workbench
-
-Static SvelteKit app connects through same-origin /api routes. Development proxy forwards
-to port 8080. The native service serves the built frontend for a single-origin local app.
-Show connection state, interpreter mode, model revision, prompt, task explanation,
-generated components, issues and binding reasons. Include a machine-context inspector,
-revision scenarios and compact in-app documentation. Use neutral surfaces, blue links,
-thin borders and a small orange accent. No marketing page, neon, decorative gradients
-or generated code execution. GSAP may animate view entry with reduced-motion respected.
+SvelteKit is the primary client. A future Qt client may consume the same JSON screen
+contract. No client receives credentials or controller addresses for rebinding. The
+active scope has no physical command route. Any future control action requires a
+separate accepted contract with identity, authorization, freshness, idempotency,
+approval and observed feedback.

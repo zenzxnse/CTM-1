@@ -3,9 +3,15 @@
 Status:: Accepted
 Date:: 2026-09-10
 
+== Active-scope note
+
+The static SvelteKit and server-owned JSON boundary remain active. ADR 0017
+supersedes the planned native display-client scope and any wording that treats this
+service as a one-off historical exercise.
+
 == Context
 
-The first prototype needs a visible task interpretation and reconciliation flow.
+The initial implementation needs a visible task interpretation and reconciliation flow.
 The user selected C++ for the core and SvelteKit, TypeScript and GSAP for any web UI.
 The previous PS4 proposal is historical; the selected problem is now PS2.
 The target panel, display driver and Schneider SDK are not available here.
@@ -14,7 +20,7 @@ The target panel, display driver and Schneider SDK are not available here.
 
 Build the workbench with SvelteKit's static adapter. The C++ HTTP service serves the
 compiled files and the API on one origin. Run it on loopback by default.
-No cloud deployment is part of this local plant-runtime prototype.
+No cloud deployment is part of this local plant-runtime service.
 
 Keep interpretation, authoritative binding resolution and reconciliation in C++.
 The browser renders a fixed component catalog from the service's JSON description.

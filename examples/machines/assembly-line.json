@@ -1,0 +1,118 @@
+{
+  "model_id": "assembly-line-a",
+  "revision": 1,
+  "name": "Assembly line A",
+  "description": "Declared production line context for externally supplied runtime data.",
+  "assets": [
+    {
+      "id": "line-a",
+      "name": "Assembly Line A",
+      "kind": "production_line",
+      "aliases": ["main line", "line one"]
+    },
+    {
+      "id": "conveyor-a1",
+      "name": "Infeed Conveyor A1",
+      "kind": "conveyor",
+      "aliases": ["infeed", "entry conveyor"]
+    },
+    {
+      "id": "oven-a1",
+      "name": "Cure Oven A1",
+      "kind": "oven",
+      "aliases": ["cure oven", "oven one"]
+    },
+    {
+      "id": "inspection-a1",
+      "name": "Vision Inspection A1",
+      "kind": "inspection_cell",
+      "aliases": ["quality camera", "inspection"]
+    }
+  ],
+  "relationships": [
+    {"id": "line-has-conveyor", "from": "line-a", "to": "conveyor-a1", "kind": "contains"},
+    {"id": "line-has-oven", "from": "line-a", "to": "oven-a1", "kind": "contains"},
+    {"id": "line-has-inspection", "from": "line-a", "to": "inspection-a1", "kind": "contains"},
+    {"id": "conveyor-to-oven", "from": "conveyor-a1", "to": "oven-a1", "kind": "feeds"},
+    {"id": "oven-to-inspection", "from": "oven-a1", "to": "inspection-a1", "kind": "feeds"}
+  ],
+  "tags": [
+    {
+      "id": "line-a.state",
+      "asset_id": "line-a",
+      "name": "Operating state",
+      "role": "operating_state",
+      "data_type": "boolean",
+      "unit": "",
+      "source": {"server": "plant-broker", "namespace_uri": "urn:factory:assembly", "identifier": "LineA.Running"}
+    },
+    {
+      "id": "line-a.throughput",
+      "asset_id": "line-a",
+      "name": "Throughput",
+      "role": "throughput",
+      "data_type": "number",
+      "unit": "parts/min",
+      "source": {"server": "plant-broker", "namespace_uri": "urn:factory:assembly", "identifier": "LineA.Throughput"}
+    },
+    {
+      "id": "conveyor-a1.speed",
+      "asset_id": "conveyor-a1",
+      "name": "Belt speed",
+      "role": "speed",
+      "data_type": "number",
+      "unit": "m/min",
+      "source": {"server": "plant-broker", "namespace_uri": "urn:factory:assembly", "identifier": "LineA.Infeed.Speed"}
+    },
+    {
+      "id": "conveyor-a1.load",
+      "asset_id": "conveyor-a1",
+      "name": "Motor load",
+      "role": "motor_load",
+      "data_type": "number",
+      "unit": "%",
+      "source": {"server": "plant-broker", "namespace_uri": "urn:factory:assembly", "identifier": "LineA.Infeed.Load"}
+    },
+    {
+      "id": "oven-a1.temperature",
+      "asset_id": "oven-a1",
+      "name": "Process temperature",
+      "role": "temperature",
+      "data_type": "number",
+      "unit": "degC",
+      "source": {"server": "plant-broker", "namespace_uri": "urn:factory:assembly", "identifier": "LineA.Oven.Temperature"}
+    },
+    {
+      "id": "oven-a1.setpoint",
+      "asset_id": "oven-a1",
+      "name": "Temperature setpoint",
+      "role": "temperature_setpoint",
+      "data_type": "number",
+      "unit": "degC",
+      "source": {"server": "plant-broker", "namespace_uri": "urn:factory:assembly", "identifier": "LineA.Oven.Setpoint"}
+    },
+    {
+      "id": "inspection-a1.reject-rate",
+      "asset_id": "inspection-a1",
+      "name": "Reject rate",
+      "role": "reject_rate",
+      "data_type": "number",
+      "unit": "%",
+      "source": {"server": "plant-broker", "namespace_uri": "urn:factory:assembly", "identifier": "LineA.Inspection.RejectRate"}
+    },
+    {
+      "id": "inspection-a1.state",
+      "asset_id": "inspection-a1",
+      "name": "Inspection available",
+      "role": "status",
+      "data_type": "boolean",
+      "unit": "",
+      "source": {"server": "plant-broker", "namespace_uri": "urn:factory:assembly", "identifier": "LineA.Inspection.Available"}
+    }
+  ],
+  "alarms": [
+    {"id": "oven-a1.high-temperature", "asset_id": "oven-a1", "name": "High process temperature", "tag_id": "oven-a1.temperature", "operator": ">=", "threshold": 205, "severity": "high"},
+    {"id": "conveyor-a1.high-load", "asset_id": "conveyor-a1", "name": "High conveyor load", "tag_id": "conveyor-a1.load", "operator": ">=", "threshold": 85, "severity": "medium"},
+    {"id": "inspection-a1.high-reject-rate", "asset_id": "inspection-a1", "name": "High reject rate", "tag_id": "inspection-a1.reject-rate", "operator": ">=", "threshold": 4, "severity": "medium"}
+  ]
+}

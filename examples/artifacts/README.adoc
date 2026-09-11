@@ -1,0 +1,41 @@
+= Engineering bundle fixture
+
+This directory is a vendor-neutral engineering bundle for the context importer. It is
+read-only fixture data and contains no controller credentials or executable instructions.
+
+== Manifest
+
+`manifest.json` uses `engineering-bundle/1`:
+
+* `machine.id`, `machine.name` and positive `machine.revision` are explicit stable identity.
+* Every artifact has an explicit `id`, `kind`, `format` and relative `path`.
+* Paths cannot be absolute or escape this directory.
+* Required kinds are `asset_hierarchy`, `relationships`, `controller_tags` and
+  `alarm_definitions`. `io_configuration`, `communications` and `machine_documents` are
+  optional, but are included here to exercise the complete import surface.
+
+== Record shapes
+
+`assets.json` is an array of records with `id`, `name`, `kind`, and optional `aliases` and
+`description`. Asset IDs use ASCII letters, digits, `_`, `-` and `.` only.
+
+`relationships.csv` is RFC4180 CSV with `id,from,to,kind`. A relationship is emitted only when
+both endpoints are explicit assets. No relationship is inferred from names, paths or documents.
+
+`tags.csv` is RFC4180 CSV with `id,asset_id,name,role,data_type,unit,server,namespace_uri,identifier`.
+The `asset_id` is the complete ownership declaration. A protocol identifier never establishes
+ownership.
+
+`io.csv` is RFC4180 CSV with `id,tag_id,signal_type,address,channel`. It is metadata for an
+explicit tag and is retained in the import report, not copied into the native model.
+
+`alarms.csv` is RFC4180 CSV with `id,asset_id,name,tag_id,operator,threshold,severity`.
+
+`communications.json` contains metadata records with `id,protocol,endpoint,security_mode`.
+It contains no secret fields. `documents.json` contains `id,title,path,media_type`; documents
+are references only and are never parsed as operating instructions.
+
+The importer returns deterministic native model JSON and an
+`engineering-import-report/1` report. The report records byte size, row count and a non-
+cryptographic FNV-1a content fingerprint for each source artifact, plus unresolved references.
+Malformed input, duplicate identities, invalid fields and oversized input are rejected.

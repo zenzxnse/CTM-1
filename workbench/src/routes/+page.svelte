@@ -1,49 +1,85 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { gsap } from 'gsap';
-  import Reading from '$lib/Reading.svelte';
-  import { registerWorkbenchTools } from '$lib/agent-tools';
   import {
     api,
+    ApiError,
+    errorHint,
+    fetchReady,
     humanize,
+    type ClientSurface,
+    type ExecutionInfo,
     type Health,
-    type MachineModel,
-    type Scenario,
     type Interpretation,
+    type MachineModel,
+    type Readiness,
+    type Scenario,
+    type SessionInfo,
     type Telemetry,
     type View
   } from '$lib/api';
+  import { registerWorkbenchTools } from '$lib/agent-tools';
+  import StatusBar from '$lib/components/StatusBar.svelte';
+  import PromptPanel from '$lib/components/PromptPanel.svelte';
+  import InterpretationReview from '$lib/components/InterpretationReview.svelte';
+  import TaskView from '$lib/components/TaskView.svelte';
+  import AlarmSummary from '$lib/components/AlarmSummary.svelte';
+  import WorkflowTimeline from '$lib/components/WorkflowTimeline.svelte';
+  import ContextInspector from '$lib/components/ContextInspector.svelte';
+  import DiagnosticsPanel from '$lib/components/DiagnosticsPanel.svelte';
+  import ExecutionPanel from '$lib/components/ExecutionPanel.svelte';
+  import RoleFilter from '$lib/components/RoleFilter.svelte';
 
-  let section = $state<'runtime' | 'context' | 'guide'>('runtime');
+  type Section = 'overview' | 'context' | 'diagnostics' | 'guide';
+  type Role = 'operator' | 'engineer' | 'supervisor';
+  type LogEntry = { time: string; code: string; message: string };
+
+  let section = $state<Section>('overview');
+  let role = $state<Role>('operator');
+  const sectionTitles: Record<Section, string> = {
+    overview: 'Operator workspace',
+    context: 'Machine context',
+    diagnostics: 'Diagnostics',
+    guide: 'Operating guide'
+  };
   let health = $state<Health | null>(null);
   let model = $state<MachineModel | null>(null);
   let scenarios = $state<Scenario[]>([]);
   let currentScenario = $state('');
-  let prompt = $state('Show the filling view for Tank 3');
+  let prompt = $state('Show an overview of the assembly line');
   let interpreter = $state('rules');
-  let viewInterpreter = $state('rules');
   let view = $state<View | null>(null);
-  let telemetry = $state<Telemetry | null>(null);
+  let viewInterpreter = $state('rules');
   let interpretation = $state<Interpretation | null>(null);
-  let error = $state('');
+  let telemetry = $state<Telemetry | null>(null);
+  let errorState = $state<{ code: string; message: string } | null>(null);
   let notice = $state('');
+  let errorLog = $state<LogEntry[]>([]);
   let busy = $state(false);
   let booting = $state(true);
   let receiving = $state(false);
-  let running = $state(true);
+  let reachable = $state<boolean | null>(null);
   let lastReceived = $state(0);
   let now = $state(Date.now());
   let requestMilliseconds = $state<number | null>(null);
   let inspectBindings = $state(false);
-  let contextFilter = $state('');
   let viewElement: HTMLElement | undefined = $state();
+  let headingElement: HTMLElement | undefined = $state();
+  let sessionInfo = $state<SessionInfo | null>(null);
+  let readiness = $state<Readiness | null>(null);
+  let viewport = $state<ClientSurface>({ width_px: 240, height_px: 160, size_class: 'large' });
   let generation = 0;
+  let events: EventSource | null = null;
 
+  let execution = $derived<ExecutionInfo | null>(interpretation?.execution ?? null);
+  let feedAgeMilliseconds = $derived(lastReceived ? Math.max(0, now - lastReceived) : null);
+  let feedStale = $derived(receiving && (feedAgeMilliseconds ?? Infinity) >= 3000);
+  let feedFresh = $derived(receiving && !feedStale);
   let fresh = $derived(
-    receiving &&
-      now - lastReceived < 3000 &&
+    feedFresh &&
       telemetry !== null &&
-      telemetry.model_revision === view?.model_revision &&
+      view !== null &&
+      telemetry.model_revision === view.model_revision &&
       telemetry.model_id === view.model_id &&
       telemetry.session_id === view.session_id &&
       telemetry.context_generation === view.context_generation
@@ -53,83 +89,154 @@
       telemetry !== null &&
       (view.model_id !== telemetry.model_id ||
         view.model_revision !== telemetry.model_revision ||
-        view.session_id !== telemetry.session_id ||
         view.context_generation !== telemetry.context_generation)
   );
-  let assetCount = $derived(new Set(view?.components.map((item) => item.asset_id) ?? []).size);
-  let filteredTags = $derived(
-    model?.tags.filter((tag) =>
-      `${tag.id} ${tag.asset_id} ${tag.role} ${tag.name}`
-        .toLowerCase()
-        .includes(contextFilter.toLowerCase())
-    ) ?? []
+  let activeAlarmCount = $derived((telemetry?.alarms ?? []).filter((alarm) => alarm.active).length);
+  let feedLabel = $derived(!receiving ? 'Disconnected' : feedStale ? 'Delayed' : 'Live');
+  let feedAge = $derived(
+    feedAgeMilliseconds === null ? 'No message' : `${Math.floor(feedAgeMilliseconds / 1000)}s ago`
+  );
+  let scenarioName = $derived(
+    scenarios.find((scenario) => scenario.id === currentScenario)?.name ??
+      health?.active_scenario ??
+      ''
   );
   let statusLabel = $derived(
-    !receiving
-      ? 'Disconnected'
-      : !running
-        ? 'Simulation paused'
-        : now - lastReceived >= 3000
-          ? 'Feed delayed'
-          : 'Receiving simulated data'
+    !receiving ? 'Waiting for telemetry' : feedStale ? 'Telemetry delayed' : 'Telemetry current'
   );
+  let announcement = $derived(view !== null ? `View resolved: ${view.title}` : 'No resolved view.');
+  let alarmAnnouncement = $derived(
+    telemetry === null ? 'Alarm states unknown.' : `${activeAlarmCount} active alarms.`
+  );
+  let workflowSteps = $derived([
+    {
+      label: 'Request',
+      state: interpretation ? 'Done' : busy ? 'Sending' : 'Pending',
+      detail: prompt.trim() ? 'Operator intent ready' : 'Waiting for a request'
+    },
+    {
+      label: 'Interpretation',
+      state: interpretation
+        ? interpretation.status === 'ready'
+          ? 'Done'
+          : 'Clarification'
+        : 'Pending',
+      detail: interpretation
+        ? interpretation.interpreter === 'rules'
+          ? 'Deterministic local rules'
+          : 'llama.cpp provider'
+        : 'Bounded context is selected first'
+    },
+    {
+      label: 'Resolution',
+      state: view ? 'Done' : 'Pending',
+      detail: view ? `${view.components.length} bound components` : 'No resolved view'
+    },
+    {
+      label: 'Telemetry',
+      state: !receiving ? 'Waiting' : feedStale ? 'Delayed' : 'Live',
+      detail: 'Ingestion remains independent of inference'
+    },
+    {
+      label: 'Reconciliation',
+      state: view?.reconciled ? 'Done' : 'Ready',
+      detail: view?.reconciled
+        ? `${view.changes?.length ?? 0} recorded changes`
+        : 'Revalidate after a model revision'
+    }
+  ]);
+
+  $effect(() => {
+    inspectBindings = role === 'engineer';
+  });
 
   async function animateView() {
     await tick();
     if (viewElement && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      gsap.fromTo(
-        viewElement,
-        { opacity: 0.65, y: 5 },
-        { opacity: 1, y: 0, duration: 0.2, overwrite: true }
-      );
+      gsap.fromTo(viewElement, { opacity: 0.65, y: 5 }, { opacity: 1, y: 0, duration: 0.2 });
     }
+  }
+
+  function recordError(failure: unknown) {
+    const code =
+      failure instanceof ApiError
+        ? failure.code
+        : failure instanceof Error
+          ? 'client_error'
+          : 'unknown';
+    const message = failure instanceof Error ? failure.message : 'The request failed.';
+    if (failure instanceof ApiError && (failure.code === 'network' || failure.code === 'timeout'))
+      reachable = false;
+    errorLog = [{ time: new Date().toLocaleTimeString(), code, message }, ...errorLog].slice(0, 8);
+  }
+
+  async function loadSession() {
+    try {
+      sessionInfo = await api<SessionInfo>('session');
+    } catch {
+      sessionInfo = null;
+    }
+  }
+
+  async function refreshContext() {
+    const [currentModel, currentHealth] = await Promise.all([
+      api<MachineModel>('model'),
+      api<Health>('health')
+    ]);
+    model = currentModel;
+    health = currentHealth;
+    currentScenario = currentHealth.active_scenario ?? currentScenario;
+    await loadSession();
   }
 
   async function compose() {
     if (!prompt.trim() || busy) return;
     busy = true;
-    error = '';
+    errorState = null;
     notice = '';
     interpretation = null;
     const requestGeneration = ++generation;
     const started = performance.now();
     try {
-      const result = await api<Interpretation>('interpret', { prompt, interpreter });
+      const result = await api<Interpretation>('interpret', {
+        prompt,
+        interpreter,
+        client: viewport
+      });
       if (requestGeneration !== generation) return;
+      reachable = true;
       interpretation = result;
       requestMilliseconds = Math.round(performance.now() - started);
       if (result.view) {
         view = result.view;
         viewInterpreter = result.interpreter;
-        if (
-          model?.session_id !== view.session_id ||
-          model?.context_generation !== view.context_generation
-        ) {
-          const [currentModel, currentHealth] = await Promise.all([
-            api<MachineModel>('model'),
-            api<Health>('health')
-          ]);
-          model = currentModel;
-          health = currentHealth;
-          currentScenario = currentHealth.active_scenario ?? currentScenario;
-        }
         await animateView();
       } else {
-        notice =
-          result.message ?? 'The request needs clarification. The existing view has been kept.';
+        notice = result.message ?? 'The request needs clarification. The existing view is kept.';
       }
     } catch (failure) {
-      if (requestGeneration === generation)
-        error = failure instanceof Error ? failure.message : 'The request failed.';
+      if (requestGeneration !== generation) return;
+      recordError(failure);
+      const code = failure instanceof ApiError ? failure.code : 'client_error';
+      errorState = {
+        code,
+        message: failure instanceof Error ? failure.message : 'The request failed.'
+      };
     } finally {
       if (requestGeneration === generation) busy = false;
     }
   }
 
+  async function pickCandidate(name: string) {
+    if (!name || busy) return;
+    prompt = `${interpretation?.prompt ?? prompt} for ${name}`;
+    await compose();
+  }
+
   async function switchScenario() {
-    if (busy) return;
+    if (busy || !currentScenario) return;
     busy = true;
-    error = '';
+    errorState = null;
     notice = '';
     generation++;
     telemetry = null;
@@ -137,78 +244,58 @@
       const result = await api<MachineModel | { model: MachineModel }>('scenario', {
         id: currentScenario
       });
+      reachable = true;
       model = 'model' in result ? result.model : result;
+      await refreshContext();
       if (view) {
-        view = await api<View>('reconcile', { view_id: view.view_id });
-        notice = `Checked the saved task against revision ${model.revision}.`;
-        await animateView();
+        try {
+          view = await api<View>('reconcile', { view_id: view.view_id });
+          notice = `Saved view revalidated against revision ${model.revision}.`;
+          await animateView();
+        } catch (failure) {
+          recordError(failure);
+          const code = failure instanceof ApiError ? failure.code : 'client_error';
+          errorState = {
+            code,
+            message: failure instanceof Error ? failure.message : 'Reconciliation failed.'
+          };
+        }
       }
     } catch (failure) {
-      error = failure instanceof Error ? failure.message : 'Could not change the configuration.';
+      recordError(failure);
+      const code = failure instanceof ApiError ? failure.code : 'client_error';
+      errorState = {
+        code,
+        message: failure instanceof Error ? failure.message : 'Could not change the model.'
+      };
     } finally {
       busy = false;
     }
   }
 
-  async function toggleSimulation() {
+  async function loadReadiness() {
     try {
-      await api('simulation', { running: !running });
-      running = !running;
-    } catch (failure) {
-      error = failure instanceof Error ? failure.message : 'Could not change simulation state.';
+      readiness = await fetchReady();
+    } catch {
+      readiness = null;
     }
   }
 
-  async function bootstrap() {
-    error = '';
-    booting = true;
-    try {
-      const [serverHealth, machineModel, availableScenarios] = await Promise.all([
-        api<Health>('health'),
-        api<MachineModel>('model'),
-        api<{ scenarios: Scenario[] }>('scenarios')
-      ]);
-      health = serverHealth;
-      model = machineModel;
-      scenarios = availableScenarios.scenarios;
-      currentScenario =
-        serverHealth.active_scenario ??
-        scenarios.find((scenario) => scenario.id === 'pump-station')?.id ??
-        scenarios[0]?.id ??
-        '';
-      running = serverHealth.simulation_running ?? true;
-      await compose();
-    } catch (failure) {
-      error = failure instanceof Error ? failure.message : 'The local runtime is not available.';
-    } finally {
-      booting = false;
-    }
+  async function recheckDiagnostics() {
+    await Promise.all([loadReadiness(), loadSession()]);
   }
 
-  onMount(() => {
-    void bootstrap();
-    const unregisterTools = registerWorkbenchTools(
-      async (request) => {
-        if (busy || !health)
-          throw new Error('The runtime is unavailable or a request is already in progress.');
-        section = 'runtime';
-        prompt = request;
-        await compose();
-        if (error) throw new Error(error);
-        return { interpretation, view };
-      },
-      () => ({ model_id: model?.model_id, revision: model?.revision, view })
-    );
-    const events = new EventSource('/api/v1/events');
-    const handleTelemetry = (event: MessageEvent) => {
+  function connectFeed() {
+    events?.close();
+    receiving = false;
+    events = new EventSource('/api/v1/events');
+    events.addEventListener('telemetry', (event) => {
       try {
-        const value = JSON.parse(event.data) as Telemetry;
+        const value = JSON.parse((event as MessageEvent).data) as Telemetry;
         if (
           !value ||
           typeof value.model_revision !== 'number' ||
           typeof value.model_id !== 'string' ||
-          typeof value.session_id !== 'string' ||
-          !Number.isSafeInteger(value.context_generation) ||
           !value.values ||
           typeof value.values !== 'object' ||
           Array.isArray(value.values) ||
@@ -216,24 +303,83 @@
         )
           return;
         telemetry = value;
-        running = Object.values(value.values).some((sample) => sample.quality === 'good');
         receiving = true;
         lastReceived = Date.now();
         now = lastReceived;
       } catch {
         receiving = false;
       }
-    };
-    events.onmessage = handleTelemetry;
-    events.addEventListener('telemetry', handleTelemetry as EventListener);
+    });
     events.onerror = () => {
       receiving = false;
     };
+  }
+
+  async function bootstrap() {
+    errorState = null;
+    booting = true;
+    try {
+      const [serverHealth, machineModel, availableScenarios] = await Promise.all([
+        api<Health>('health'),
+        api<MachineModel>('model'),
+        api<{ scenarios: Scenario[] }>('scenarios')
+      ]);
+      reachable = true;
+      health = serverHealth;
+      model = machineModel;
+      scenarios = Array.isArray(availableScenarios.scenarios) ? availableScenarios.scenarios : [];
+      currentScenario = serverHealth.active_scenario ?? scenarios[0]?.id ?? '';
+      connectFeed();
+      void loadSession();
+      void loadReadiness();
+      await compose();
+    } catch (failure) {
+      recordError(failure);
+      errorState = {
+        code: failure instanceof ApiError ? failure.code : 'client_error',
+        message: failure instanceof Error ? failure.message : 'The local service is not available.'
+      };
+    } finally {
+      booting = false;
+    }
+  }
+
+  async function setSection(next: Section) {
+    section = next;
+    await tick();
+    headingElement?.focus();
+  }
+
+  onMount(() => {
+    function updateViewport() {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      viewport = {
+        width_px: Math.max(240, Math.min(7680, width)),
+        height_px: Math.max(160, Math.min(4320, height)),
+        size_class: width <= 640 ? 'small' : width <= 1024 ? 'medium' : 'large'
+      };
+    }
+    updateViewport();
+    window.addEventListener('resize', updateViewport, { passive: true });
+    void bootstrap();
+    const unregisterTools = registerWorkbenchTools(
+      async (request) => {
+        if (busy || !health) throw new Error('The runtime is unavailable or busy.');
+        section = 'overview';
+        prompt = request;
+        await compose();
+        if (errorState) throw new Error(errorState.message);
+        return { interpretation, view };
+      },
+      () => ({ model_id: model?.model_id, revision: model?.revision, view })
+    );
     const timer = setInterval(() => {
       now = Date.now();
     }, 1000);
     return () => {
-      events.close();
+      events?.close();
+      window.removeEventListener('resize', updateViewport);
       clearInterval(timer);
       generation++;
       unregisterTools();
@@ -243,440 +389,281 @@
 </script>
 
 <svelte:head>
-  <title>Context HMI | Task workbench</title>
+  <title>Context HMI | Operator workspace</title>
   <meta
     name="description"
-    content="Inspect machine context, compose task views and review configuration changes in a local HMI prototype."
+    content="Interpret operator requests against declared machine context and render live, validated HMI views."
   />
 </svelte:head>
 
+<div class="sr-only" aria-live="polite">{announcement}</div>
+<div class="sr-only" aria-live="polite">{alarmAnnouncement}</div>
 <a class="skip-link" href="#main">Skip to workbench</a>
 <header class="topbar">
   <a href="/" class="wordmark" aria-label="Context HMI home"
     ><span class="brand-symbol" aria-hidden="true">[·]</span><strong>context</strong><span>hmi</span
     ></a
   >
-  <span class="topbar-divider"></span><span class="topbar-label">Engineering workbench</span>
-  <span class="prototype-label">Prototype {health?.version ?? '0.1.0'}</span>
+  <span class="topbar-divider"></span><span class="topbar-label">Operator workspace</span>
+  <span class="version-label">{health?.version ?? 'Connecting'}</span>
 </header>
 
 <div class="application">
   <aside class="sidebar" aria-label="Workbench navigation">
     <p class="sidebar-heading">Workspace</p>
     <nav>
-      <button
-        class:active={section === 'runtime'}
-        onclick={() => {
-          section = 'runtime';
-        }}><span aria-hidden="true">▦</span> Task view</button
+      <button class:active={section === 'overview'} onclick={() => void setSection('overview')}
+        ><span aria-hidden="true">▦</span> Overview</button
+      >
+      <button class:active={section === 'context'} onclick={() => void setSection('context')}
+        ><span aria-hidden="true">≡</span> Machine context</button
       >
       <button
-        class:active={section === 'context'}
-        onclick={() => {
-          section = 'context';
-        }}><span aria-hidden="true">≡</span> Machine context</button
+        class:active={section === 'diagnostics'}
+        onclick={() => void setSection('diagnostics')}
+        ><span aria-hidden="true">⚙</span> Diagnostics</button
       >
-      <button
-        class:active={section === 'guide'}
-        onclick={() => {
-          section = 'guide';
-        }}><span aria-hidden="true">?</span> How it works</button
+      <button class:active={section === 'guide'} onclick={() => void setSection('guide')}
+        ><span aria-hidden="true">?</span> Operating guide</button
       >
     </nav>
+    <RoleFilter bind:role />
     <div class="sidebar-model">
       <p class="sidebar-heading">Active model</p>
       <strong>{model?.name ?? 'Connecting…'}</strong>
-      <code>{model?.model_id ?? 'local runtime'}</code>
-      {#if model}<span>Revision {model.revision}</span>{/if}
+      <code>{model?.model_id ?? 'local service'}</code>
+      {#if model}<span
+          >Revision {model.revision} · generation {model.context_generation ?? 'Unknown'}</span
+        >{/if}
     </div>
     <div class="sidebar-bottom">
-      <span class="outline-label">Simulator</span>
-      <p>All readings come from simulated equipment.</p>
+      <span class="outline-label">External data boundary</span>
+      <p>
+        Values arrive through bounded telemetry ingestion. The workbench never owns source
+        credentials.
+      </p>
     </div>
   </aside>
 
   <main id="main">
+    <StatusBar
+      {health}
+      {model}
+      {scenarioName}
+      {reachable}
+      {readiness}
+      sessionRole={sessionInfo?.role ?? role}
+      {feedLabel}
+      {feedStale}
+      {feedAge}
+      feedDisconnected={!receiving}
+      onReconnect={connectFeed}
+    />
     <div class="page-heading">
       <div>
-        <p class="breadcrumb">
-          Workspace / {section === 'runtime'
-            ? 'Task view'
-            : section === 'context'
-              ? 'Machine context'
-              : 'Documentation'}
-        </p>
-        <h1>
-          {section === 'runtime'
-            ? 'Task view'
-            : section === 'context'
-              ? 'Machine context'
-              : 'How it works'}
-        </h1>
+        <p class="breadcrumb">Workspace / {sectionTitles[section]}</p>
+        <h1 tabindex="-1" bind:this={headingElement}>{sectionTitles[section]}</h1>
       </div>
       <span class:connection-lost={!receiving} class="connection"
         ><span class="connection-marker"></span>{statusLabel}</span
       >
     </div>
 
-    {#if error}
+    {#if errorState}
       <div class="message error" role="alert">
-        <strong>Could not complete the request</strong>
-        <p>{error}</p>
-        {#if !health}<p>Start the local C++ service, then reconnect.</p>
-          <button class="small-button" onclick={bootstrap}>Reconnect</button>{/if}
+        <strong>Could not complete the request ({errorState.code})</strong>
+        <p>{errorState.message}</p>
+        <p>{errorHint(errorState.code)}</p>
+        {#if !health}<button class="small-button" onclick={bootstrap}>Reconnect service</button
+          >{/if}
       </div>
     {/if}
 
-    {#if section === 'runtime'}
+    {#if section === 'overview'}
       <div class="runtime-layout">
         <div class="runtime-main">
-          <section class="request-panel" aria-labelledby="request-title">
-            <h2 id="request-title">What do you need to see?</h2>
-            <p>Describe a supported task and the equipment involved.</p>
-            <form
-              onsubmit={(event) => {
-                event.preventDefault();
-                void compose();
-              }}
-            >
-              <label for="request" class="sr-only">Operator request</label>
-              <textarea
-                id="request"
-                bind:value={prompt}
-                maxlength="2048"
-                rows="2"
-                placeholder="Show the filling view for Tank 3"
-                disabled={busy}></textarea>
-              <div class="request-actions">
-                <div class="interpreter-select">
-                  <label for="interpreter">Interpret with</label><select
-                    id="interpreter"
-                    bind:value={interpreter}
-                    disabled={busy}
-                  >
-                    <option value="rules">Rules · offline</option><option
-                      value="llama"
-                      disabled={!health?.llama_configured}>Local AI · llama.cpp</option
-                    >
-                  </select>
-                </div>
-                <button
-                  class="primary-button"
-                  type="submit"
-                  disabled={busy || !health || !prompt.trim()}
-                  >{busy ? 'Resolving…' : 'Compose view'}<span aria-hidden="true">↗</span></button
-                >
-              </div>
-            </form>
-            <div class="examples">
-              <span>Try</span
-              >{#each ['Show the filling view for Tank 3', 'Show an overview of Pump 1', 'Show alarms for Tank 3'] as example}
-                <button
-                  disabled={busy}
-                  onclick={() => {
-                    prompt = example;
-                  }}>{example}</button
-                >{/each}
-            </div>
-          </section>
-
-          {#if notice}<div class="message notice" role="status">
-              <p>{notice}</p>
-              {#if interpretation?.candidates?.length}<p>
-                  Matches: {interpretation.candidates
-                    .map((candidate) =>
-                      typeof candidate === 'string' ? candidate : candidate.name
-                    )
-                    .join(', ')}.
-                </p>{/if}
-              {#if interpretation?.status === 'clarification' && view}<p>
-                  The previous view is still shown below.
-                </p>{/if}
-            </div>{/if}
-
-          {#if view}
-            <section class="view-shell" bind:this={viewElement} aria-labelledby="view-title">
-              <div class="view-heading">
-                <div>
-                  <span class="eyebrow">Resolved view</span>
-                  <h2 id="view-title">{view.title}</h2>
-                </div>
-                <span class:status-review={view.status !== 'ready'} class="status-tag"
-                  >{humanize(view.status)}</span
-                >
-              </div>
-              <div class="view-meta">
-                <span>{view.components.length} components</span><span
-                  >{assetCount} equipment assets</span
-                ><span>Revision {view.model_revision}</span>
-                <button
-                  class="text-button"
-                  onclick={() => {
-                    inspectBindings = !inspectBindings;
-                  }}>{inspectBindings ? 'Hide bindings' : 'Inspect bindings'}</button
-                >
-              </div>
-              {#if view.issues.length}<div class="view-issues" role="status">
-                  <strong>Context needs review</strong>
-                  <ul>
-                    {#each view.issues as issue}<li>{issue.message}</li>{/each}
-                  </ul>
-                </div>{/if}
-              {#if !fresh}<div class="stale-banner">
-                  {differentContext
-                    ? 'The runtime session or configuration has changed. Make a fresh request to use the current context.'
-                    : 'Current readings are unavailable. Values stay unknown until matching telemetry arrives.'}
-                </div>{/if}
-              {#if view.components.length}
-                <div class="readings-grid">
-                  {#each view.components as component (component.id)}<Reading
-                      {component}
-                      {telemetry}
-                      {fresh}
-                    />{/each}
-                </div>
-              {:else}<div class="empty-view">
-                  <h3>No components resolved</h3>
-                  <p>
-                    Check the missing context above, or make a new request against the current
-                    model.
-                  </p>
-                </div>{/if}
-              {#if inspectBindings}<div class="table-scroll binding-table">
-                  <table>
-                    <thead
-                      ><tr
-                        ><th>Component</th><th>Equipment</th><th>Tag and role</th><th>State</th></tr
-                      ></thead
-                    ><tbody>
-                      {#each view.components as component}<tr
-                          ><td>{component.label}</td><td><code>{component.asset_id}</code></td><td
-                            ><code>{component.tag_id}</code><small
-                              >{humanize(component.role)}{component.unit
-                                ? ` · ${component.unit}`
-                                : ''}</small
-                            ></td
-                          ><td>{humanize(component.status ?? 'ready')}</td></tr
-                        >{/each}
-                    </tbody>
-                  </table>
-                </div>{/if}
-              {#if view.changes?.length}<div class="change-record">
-                  <h3>Reconciliation record</h3>
-                  {#each view.changes as change}<p>
-                      <span class="inline-tag">{humanize(change.kind)}</span>
-                      {change.message}{#if change.tag_id}
-                        <code>{change.tag_id}</code>{/if}
-                    </p>{/each}
-                </div>{/if}
-            </section>
-          {:else}<div class="empty-view">
+          <PromptPanel bind:prompt bind:interpreter {busy} {health} oncompose={compose} />
+          {#if notice}<div class="message notice" role="status"><p>{notice}</p></div>{/if}
+          {#if interpretation}<InterpretationReview
+              {interpretation}
+              {busy}
+              onpick={(name) => void pickCandidate(name)}
+            />{/if}
+          <ExecutionPanel {execution} />
+          <AlarmSummary {telemetry} fresh={feedFresh} />
+          {#if view}<TaskView
+              {view}
+              {telemetry}
+              {fresh}
+              {differentContext}
+              bind:inspectBindings
+              bind:element={viewElement}
+            />{:else}<div class="empty-view">
               <span class="empty-icon" aria-hidden="true">[ ]</span>
-              <h2>{booting ? 'Connecting to the runtime' : 'Your task view will appear here'}</h2>
+              <h2>{booting ? 'Connecting to the service' : 'Your task view will appear here'}</h2>
               <p>
                 {booting
-                  ? 'Loading the machine model and its declared relationships.'
-                  : 'The runtime composes components after resolving your request.'}
+                  ? 'Loading declared context and provider state.'
+                  : 'Ask for a view to resolve components against the current model.'}
               </p>
             </div>{/if}
         </div>
-
-        <aside class="context-rail" aria-label="Task and configuration details">
+        <aside class="context-rail" aria-label="Request and data details">
           <section class="rail-section">
             <h2>Interpreted task</h2>
             {#if view}<dl class="task-facts">
                 <dt>Task</dt>
                 <dd>{humanize(view.task.kind)}</dd>
                 <dt>Equipment</dt>
-                <dd><code>{view.task.anchor_asset_id || 'All equipment'}</code></dd>
+                <dd><code>{view.task.anchor_asset_id || 'All declared equipment'}</code></dd>
                 <dt>Interpreter</dt>
                 <dd>{viewInterpreter.startsWith('llama') ? 'Local AI' : 'Rules'}</dd>
-                <dt>Data source</dt>
-                <dd>Simulator</dd>
+                <dt>Model revision</dt>
+                <dd>{view.model_revision}</dd>
               </dl>
               <p class="rail-note">
-                Open “Why this reading?” to see the declared reason for each component.
-              </p>
-            {:else}<p class="rail-note">
+                Every component shows its declared binding reason and source identity.
+              </p>{:else}<p class="rail-note">
                 A resolved request will show its equipment scope here.
               </p>{/if}
           </section>
           <section class="rail-section">
-            <h2>Configuration changes</h2>
-            <p>Change the model to check the saved task against another configuration.</p>
+            <h2>Model revision</h2>
+            <p>
+              Switch between declared configurations to revalidate a saved view and inspect binding
+              changes.
+            </p>
             <label for="scenario">Machine configuration</label><select
               id="scenario"
               bind:value={currentScenario}
               disabled={busy || !scenarios.length}
               onchange={switchScenario}
-            >
-              {#each scenarios as scenario}<option value={scenario.id}
+              >{#each scenarios as scenario (scenario.id)}<option value={scenario.id}
                   >{scenario.name}{scenario.revision ? ` · r${scenario.revision}` : ''}</option
                 >{/each}</select
             >
             <p class="rail-note">
               {scenarios.find((scenario) => scenario.id === currentScenario)?.description ??
-                'Loading configurations…'}
+                'No alternate configuration loaded.'}
             </p>
           </section>
           <section class="rail-section">
-            <h2>Live feed</h2>
+            <h2>Live telemetry</h2>
             <dl class="task-facts">
               <dt>Source</dt>
-              <dd>Simulated readings</dd>
+              <dd>{health?.mode ?? 'Unknown'}</dd>
               <dt>Last message</dt>
-              <dd>
-                {lastReceived
-                  ? `${Math.max(0, Math.floor((now - lastReceived) / 1000))}s ago`
-                  : 'Waiting'}
-              </dd>
-              <dt>Snapshot</dt>
-              <dd>{telemetry?.tick ?? 'Unknown'}</dd>
+              <dd>{feedAge}</dd>
+              <dt>Sequence</dt>
+              <dd>{telemetry?.sequence ?? 'Unknown'}</dd>
+              <dt>Quality</dt>
+              <dd>{telemetry ? humanize(telemetry.quality) : 'Unknown'}</dd>
+              <dt>Values</dt>
+              <dd>{telemetry ? Object.keys(telemetry.values).length : 'Unknown'}</dd>
             </dl>
-            <button class="small-button" onclick={toggleSimulation} disabled={!health}
-              >{running ? 'Pause simulation' : 'Resume simulation'}</button
-            >
+            <p class="rail-note">
+              Current values are server-owned. Stale or unknown data is never presented as valid.
+            </p>
+          </section>
+          <section class="rail-section">
+            <h2>Client surface</h2>
+            <dl class="task-facts">
+              <dt>Viewport</dt>
+              <dd>{viewport.width_px} × {viewport.height_px}</dd>
+              <dt>Size class</dt>
+              <dd>{viewport.size_class}</dd>
+            </dl>
+            <p class="rail-note">
+              The current surface is sent as optional request metadata so the composer can select a
+              suitable layout.
+            </p>
           </section>
           <section class="rail-section timing">
-            <h2>Last request</h2>
+            <h2>Browser request time</h2>
             <p class="timing-value">
               {requestMilliseconds === null ? 'No measurement' : `${requestMilliseconds} ms`}
             </p>
             <p class="rail-note">
-              Observed browser round trip for this request. Includes interpretation and response,
-              excludes rendering.
+              Round trip only. Inspect execution details for context size, provider usage, and cache
+              state.
             </p>
           </section>
         </aside>
       </div>
+      <WorkflowTimeline steps={workflowSteps} />
     {:else if section === 'context'}
       <p class="intro">
-        Equipment identities, tag ownership and connections used to resolve a task.
+        The declared model is the source of truth for identities, ownership, units, relationships,
+        alarms, and source references. Retrieval is bounded before interpretation.
       </p>
-      {#if model}
-        <div class="context-counts">
-          <div><strong>{model.assets.length}</strong><span>Equipment assets</span></div>
-          <div><strong>{model.tags.length}</strong><span>Declared tags</span></div>
-          <div><strong>{model.relationships.length}</strong><span>Connections</span></div>
-          <div><strong>{model.alarms.length}</strong><span>Alarm definitions</span></div>
-        </div>
-        <section class="document-section">
-          <h2>Equipment and connections</h2>
-          <div class="table-scroll">
-            <table>
-              <thead
-                ><tr
-                  ><th>Equipment</th><th>Identity</th><th>Type</th><th>Declared connection</th></tr
-                ></thead
-              ><tbody
-                >{#each model.assets as asset}<tr
-                    ><td>{asset.name}</td><td><code>{asset.id}</code></td><td>{asset.kind}</td><td
-                      >{model.relationships
-                        .filter((relationship) => relationship.from === asset.id)
-                        .map((relationship) => `${relationship.kind} ${relationship.to}`)
-                        .join(', ') || 'None declared'}</td
-                    ></tr
-                  >{/each}</tbody
-              >
-            </table>
-          </div>
-        </section>
-        <section class="document-section">
-          <div class="section-heading">
-            <h2>Tag registry</h2>
-            <label class="search-label"
-              >Filter tags<input
-                bind:value={contextFilter}
-                placeholder="Name, owner or role"
-                type="search"
-              /></label
-            >
-          </div>
-          <div class="table-scroll">
-            <table>
-              <thead
-                ><tr
-                  ><th>Tag</th><th>Owner</th><th>Role</th><th>Type / unit</th><th
-                    >Source reference</th
-                  ></tr
-                ></thead
-              ><tbody
-                >{#each filteredTags as tag}<tr
-                    ><td><code>{tag.id}</code><small>{tag.name}</small></td><td
-                      ><code>{tag.asset_id}</code></td
-                    ><td>{humanize(tag.role)}</td><td
-                      >{tag.data_type}{tag.unit ? ` / ${tag.unit}` : ''}</td
-                    ><td
-                      ><code>{tag.source.identifier}</code><small>{tag.source.namespace_uri}</small
-                      ><small>{tag.source.server}</small></td
-                    ></tr
-                  >{/each}</tbody
-              >
-            </table>
-          </div>
-          {#if !filteredTags.length}<p class="empty-results">No tags match this filter.</p>{/if}
-        </section>
-      {/if}
+      <ContextInspector {model} {telemetry} fresh={feedFresh} />
+    {:else if section === 'diagnostics'}
+      <p class="intro">
+        Inspect reachability, provider readiness, telemetry freshness, execution cost, model
+        generation, and recent failures. A provider failure does not stop current telemetry.
+      </p>
+      <DiagnosticsPanel
+        {health}
+        {model}
+        {reachable}
+        {receiving}
+        {feedAge}
+        {requestMilliseconds}
+        {errorLog}
+        {readiness}
+        session={sessionInfo}
+        {execution}
+        onrecheck={recheckDiagnostics}
+      />
     {:else}
       <article class="guide">
         <p class="intro">
-          This prototype composes views for a small set of tasks using declared machine context.
+          This workspace turns natural-language operator intent into a finite, validated view. The
+          service owns context interpretation, binding, reconciliation, and telemetry state. The
+          client renders the declarative result.
         </p>
-        <h2>1. Interpret the request</h2>
+        <h2>Interpret with bounded context</h2>
         <p>
-          The interpreter identifies a task and an equipment scope. The offline rule mode supports
-          filling, overview and alarms. A configured llama.cpp server can interpret the request
-          through the same typed task interface.
+          Relevant assets, relationships, tags, alarms, and task vocabulary are selected before an
+          interpreter runs. Static provider instructions remain stable while request-specific
+          context and input stay bounded. Revision-aware caches avoid repeating equivalent work.
         </p>
-        <h2>2. Resolve the machine context</h2>
+        <h2>Validate before rendering</h2>
         <p>
-          The C++ engine checks equipment identity, measurement roles, engineering units and
-          declared connections. It selects the data that the supported task needs. It returns
-          missing or ambiguous context for review.
+          Rules or llama.cpp may propose a task, but they cannot choose arbitrary source addresses.
+          The native engine checks asset identity, ownership, units, roles, permissions, and current
+          generation before composing the screen.
         </p>
-        <h2>3. Compose the view</h2>
+        <h2>Render live state honestly</h2>
         <p>
-          The engine returns a JSON screen description. The workbench renders gauges, values, states
-          and alarms from its component catalog. Each component includes its binding and the reason
-          it was selected.
+          The view contract contains stable component identities, binding explanations, quality,
+          timestamps, alarms, and unresolved issues. This client keeps unknown, stale, delayed, and
+          disconnected states visible.
         </p>
-        <h2>4. Reevaluate after changes</h2>
+        <h2>Reconcile after a model change</h2>
         <p>
-          The saved task is checked against the revised machine model. Binding dependencies retain
-          equipment ownership, measurement role, unit and source reference. Changed meaning is
-          reported for review.
+          Choose another declared configuration to revalidate the saved view. Same-ID semantic
+          changes become reviewable conflicts, and unsupported replacements remain unresolved rather
+          than guessed.
         </p>
-        <h2>Try the demonstration</h2>
-        <ol>
-          <li>Request the filling view for Tank 3.</li>
-          <li>Inspect why the level and feed measurements were included.</li>
-          <li>Choose a revised configuration and inspect the changes.</li>
-          <li>Make a fresh request to inspect the current model.</li>
-          <li>Pause the simulator or stop the service to inspect the unavailable-data state.</li>
-        </ol>
-        <h2>What the prototype does not establish</h2>
+        <h2>Telemetry boundary</h2>
         <p>
-          The readings are simulated. This workbench does not control physical equipment. Schema and
-          binding checks reject specific errors; they do not establish general interpretation
-          accuracy or process safety. The request timing shown in the interface is a local
-          observation, not a comparative benchmark.
+          Operational data is submitted through bounded ingestion and distributed independently of
+          inference. The browser does not connect to controllers and does not carry credentials.
+          External dictation, if used, only supplies text to the same request field.
         </p>
-        <h2>Implementation references</h2>
+        <h2>What this establishes</h2>
         <p>
-          <a href="https://github.com/nlohmann/json">nlohmann JSON</a> ·
-          <a href="https://github.com/yhirose/cpp-httplib">cpp-httplib</a>
-          · <a href="https://github.com/ggml-org/llama.cpp">llama.cpp</a> ·
-          <a href="https://svelte.dev/docs/kit">SvelteKit</a>
-          · <a href="https://gsap.com/docs/v3/">GSAP</a>
-        </p>
-        <p class="guide-note">
-          Architecture decisions, API investigation and verification commands are maintained in the
-          repository’s AsciiDoc documents.
+          It establishes a reusable JSON contract between a native service and a browser renderer.
+          Product-specific runtime compatibility and process-safety certification require separate
+          access and evidence.
         </p>
       </article>
     {/if}
     <footer class="page-footer">
-      <span>Context HMI</span><span>Local PS2 prototype · Simulated equipment</span>
+      <span>Context HMI</span><span
+        >Local-first operator workspace · Server-owned context and telemetry</span
+      >
     </footer>
   </main>
 </div>

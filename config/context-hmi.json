@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8080,
+    "allow_remote": false,
+    "workbench_origin": "",
+    "web_dir": "workbench/build"
+  },
+  "machine": {
+    "model": "examples/machines/assembly-line.json",
+    "models_dir": "examples/machines",
+    "watch": true,
+    "rescan_ms": 500
+  },
+  "telemetry": {
+    "stale_after_ms": 3000,
+    "max_values": 512,
+    "max_batch_bytes": 65536
+  },
+  "inference": {
+    "endpoint": "",
+    "model": "local-model",
+    "timeout_ms": 5000,
+    "context_bytes": 12288,
+    "max_output_tokens": 256,
+    "allow_remote": false,
+    "key_env": ""
+  },
+  "cache": {
+    "retrieval_capacity": 256,
+    "interpretation_capacity": 128,
+    "ttl_seconds": 300
+  },
+  "audit": {
+    "actor": "local-operator"
+  },
+  "storage": {
+    "file": "",
+    "synchronize": true,
+    "maximum_bytes": 67108864
+  },
+  "diagnostics": {
+    "file": "",
+    "queue_capacity": 1024,
+    "rotation_bytes": 8388608,
+    "rotation_files": 3
+  }
+}

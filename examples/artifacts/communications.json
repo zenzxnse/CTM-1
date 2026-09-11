@@ -1,0 +1,8 @@
+[
+  {
+    "id": "plant-broker",
+    "protocol": "opcua",
+    "endpoint": "opc.tcp://broker.invalid:4840",
+    "security_mode": "sign-and-encrypt"
+  }
+]

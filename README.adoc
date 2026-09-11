@@ -1,20 +1,34 @@
 = Context HMI
 
-Context HMI is a local PS2 prototype for composing task views from declared machine
-context. It is not a production HMI or a replacement for PLC protection logic.
-It exists to test whether task interpretation and model reconciliation can reduce
-manual screen configuration when equipment changes.
+Context HMI is a reusable local-first service that turns reviewed machine context
+and an operator request into a validated declarative HMI view. It is an advisory
+layer, not a PLC safety system, control authority, or vendor-runtime replacement.
 
-== Main flow
+== Supported workflow
 
-Machine JSON + operator request -> interpreter -> C++ context resolver -> JSON view
--> SvelteKit component catalog. A separate simulator supplies telemetry over SSE.
-Configuration changes -> saved task and binding records -> reconciliation -> reviewed view.
+. Load a bounded, versioned machine model with explicit asset, tag, role, unit,
+  relationship and alarm metadata.
+. Create that model from reviewed engineering artifacts and explicit mapping
+  decisions, retaining provenance and unresolved fields.
+. Ingest current telemetry from an external source through the JSON API.
+. Retrieve only the relevant model subgraph for the operator request.
+. Interpret through deterministic rules, an optional local llama.cpp endpoint, or
+  an explicitly enabled OpenAI-compatible provider.
+. Validate the finite task proposal and resolve bindings in C++.
+. Return a versioned JSON screen with catalog components, values, quality,
+  freshness, binding evidence and issues.
+. Reconcile saved views when the model revision changes.
+
+Provider calls are bounded and observable. Retrieval and interpretation caches are
+finite, TTL-bound and keyed by model identity, revision, generation, provider and
+normalized request. Cache hits, context size, candidate scope, truncation, provider
+usage and timings are exposed for engineering review. Telemetry remains available
+when inference is unavailable.
 
 == Quick start
 
-Prerequisites: a C++20 compiler, CMake 3.25+, Ninja, Node.js 22.12+ and npm.
-Python 3.11+ runs the API tests and benchmark wrapper. Native headers are vendored.
+Prerequisites are CMake 4.x, a C++20 compiler, Ninja, Node.js 22.12 or newer and
+Python 3.11 or newer. Native build and execution are owned by the release process.
 
 [source,shell]
 ----
@@ -22,73 +36,83 @@ npm --prefix workbench ci
 npm --prefix workbench run build
 cmake --preset debug
 cmake --build --preset debug --parallel 2
-./build/debug/context-hmi --web-dir workbench/build
+./build/linux-debug/context-hmi --config config/context-hmi.json \
+  --web-dir workbench/build \
+  --model examples/machines/assembly-line.json \
+  --models examples/machines
 ----
 
-Open http://127.0.0.1:8080[the local workbench]. The default mode uses explicit
-rules and simulated telemetry. Try `Show the filling view for Tank 3`, then select
-`Add a second feed` or `Move a flow tag owner` in the configuration selector.
+Open http://127.0.0.1:8080[the local workbench]. Enter a request such as
+`Show the status of the packaging line`. Post a current telemetry batch to
+`/api/v1/telemetry` and inspect the generated view and execution metadata.
 
-On Windows, run CMake from a developer shell with a C++ compiler available and use
-`build/debug/context-hmi.exe` for the executable. Windows execution remains unverified.
+== API and configuration
 
-== Implemented features
+The HTTP API is versioned under `/api/v1` and uses JSON envelopes. The important
+routes are `GET /health`, `GET /session`, `GET /ready`, `GET /model`,
+`GET /catalog`, `GET /scenarios`, `GET /metrics`, `GET /telemetry`, `GET /events`,
+`GET /audit`, `GET /records`, `POST /context/retrieve`, `POST /telemetry`,
+`POST /interpret`, `POST /resolve`, `POST /reconcile` and `POST /scenario`.
+See link:docs/api.adoc[the API contract].
 
-* Bounded machine-model validation and declared equipment relationships.
-* Rule interpretation for filling, overview and alarm tasks, with clarification states.
-* JSON views with binding reasons and a fixed component catalog.
-* Reconciliation after configuration changes, including missing and changed bindings.
-* A local HTTP API, simulated telemetry stream and SvelteKit workbench.
-* An optional loopback llama.cpp provider with separate failure handling.
+The service configuration is JSON and validated against
+link:schemas/service-config.schema.json[the schema]. The orchestration file is
+YAML and is not parsed as application configuration. Secrets are environment or
+file references only. See link:config/deployment.yaml[the deployment profile] and
+link:docker/README.adoc[container instructions].
 
-The final verification record is in link:docs/verification.adoc[verification].
+== Product boundary
 
-== Scope and limitations
+The JSON model and screen contract are vendor-neutral. Engineering artifacts are
+the input to reviewed context creation; product-specific runtime integration is
+outside the active release. The screen is composed dynamically from the selected
+task and adapts through a responsive layout contract, with no predesigned screen
+set or generated executable UI. Qt can consume the same screen contract in a
+future client.
 
-The first implementation reads reviewed JSON models and simulates equipment. It does
-not browse a PLC, import a Schneider project, operate real equipment or render through
-LVGL. No local LLM weights are included. Provider contract tests use a mock HTTP server;
-they do not establish compatibility or interpretation quality for a particular model.
+To create a model from a reviewed engineering bundle, use the context importer:
 
-Views, simulator state and the server's binding records are memory-only. Restart loads
-the selected model again. There is no durable alarm history, production authentication,
-plant authorization or general process diagnosis. The UI shows unavailable data explicitly.
-The source model's ownership, roles and relationships still require engineering review.
+[source,shell]
+----
+./build/linux-debug/context-hmi-context --bundle examples/artifacts \
+  --output build/assembly-line-import-result.json
+jq '.model' build/assembly-line-import-result.json > build/assembly-line.json
+----
 
-The benchmark is a native smoke baseline. It is not a comparison with an existing HMI,
-an engineering-effort study, or a compact-panel memory result.
+Review the import report before supplying the extracted model to the service. The
+importer never derives ownership or relationships from names, paths or protocol
+addresses.
+
+The service uses Drogon for HTTP and the framed operational journal for required
+records. It does not use SQLite. Diagnostic logs, operational records, current
+telemetry and benchmark results are separate concerns.
 
 == Documentation
 
 * link:docs/architecture.adoc[Architecture and failure behavior]
-* link:docs/api.adoc[HTTP API and local inference]
-* link:docs/api-investigation.adoc[OPC UA, llama.cpp and Schneider API investigation]
-* link:docs/demo.adoc[Demonstration and test cases]
+* link:docs/api.adoc[HTTP API and inference]
+* link:docs/context-efficiency.adoc[Context interpretation and cache strategy]
+* link:docs/api-investigation.adoc[Provider and vendor research]
+* link:docs/platforms.adoc[Platform evidence matrix]
+* link:docs/verification.adoc[Verification record]
 * link:docs/adr/[Architecture decisions]
 * link:benchmarks/README.adoc[Benchmark methodology]
-* link:benchmarks/RESULTS.adoc[Recorded smoke results]
-* link:third_party/README.adoc[Dependency versions and licenses]
+* link:third_party/README.adoc[Dependency versions and licences]
 
-== Verification commands
+== Verification
 
-[source,shell]
-----
-ctest --preset debug
-npm --prefix workbench run check
-npm --prefix workbench run format:check
-python3 -m ruff check tests tools benchmarks
-python3 -m compileall -q tests tools benchmarks
-npm exec --yes --package=pyright -- pyright
-----
-
-Ruff is a development dependency: install it with `python3 -m pip install ruff`.
-The verification record includes exact tool versions, installation checks and test limitations.
-
-On Linux, the sanitizer preset enables AddressSanitizer and UndefinedBehaviorSanitizer:
+Run the workbench checks, native Debug and Release suites, sanitizer profile,
+package smoke checks and platform-specific jobs from the repository workflow.
+Raw benchmark JSON is preserved and plots are generated only from measured data:
 
 [source,shell]
 ----
-cmake --preset sanitizers
-cmake --build --preset sanitizers --parallel 2
-ctest --preset sanitizers
+python3 benchmarks/live.py --build-dir build/linux-release \
+  --save build/benchmarks/live.json
+python3 benchmarks/plot.py --live build/benchmarks/live.json \
+  --output build/benchmarks/context-hmi.svg
 ----
+
+Cross-compilation, Docker Desktop execution and a Linux container health check do
+not establish native Windows, Windows Server, TCL display, vendor-runtime or
+industrial-controller compatibility. Evidence is labelled accordingly.

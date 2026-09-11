@@ -1,35 +1,202 @@
 {
-  "version": 6,
+  "$schema": "https://cmake.org/cmake/help/v4.0/manual/presets/schema.json",
+  "version": 10,
+  "cmakeMinimumRequired": {"major": 4, "minor": 0, "patch": 0},
   "configurePresets": [
     {
-      "name": "debug",
-      "displayName": "Debug prototype",
+      "name": "base",
+      "hidden": true,
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/debug",
-      "cacheVariables": {"CMAKE_BUILD_TYPE": "Debug", "BUILD_TESTING": "ON"}
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+        "CONTEXT_HMI_ENABLE_HARDENING": true,
+        "CONTEXT_HMI_WARNINGS_AS_ERRORS": true
+      },
+      "warnings": {"dev": true, "deprecated": true},
+      "errors": {"dev": true, "deprecated": true}
+    },
+    {
+      "name": "debug",
+      "inherits": "base",
+      "displayName": "Linux Debug",
+      "description": "Debug build with tests and benchmarks",
+      "binaryDir": "${sourceDir}/build/linux-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTING": true,
+        "CONTEXT_HMI_BUILD_BENCHMARKS": true
+      }
     },
     {
       "name": "release",
-      "displayName": "Release prototype",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/release",
-      "cacheVariables": {"CMAKE_BUILD_TYPE": "Release", "BUILD_TESTING": "ON"}
+      "inherits": "base",
+      "displayName": "Linux Release",
+      "description": "Hardened release build with verification targets",
+      "binaryDir": "${sourceDir}/build/linux-release",
+      "installDir": "${sourceDir}/dist/linux",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTING": true,
+        "CONTEXT_HMI_BUILD_BENCHMARKS": true
+      }
     },
     {
       "name": "sanitizers",
       "inherits": "debug",
-      "binaryDir": "${sourceDir}/build/sanitizers",
-      "cacheVariables": {"CONTEXT_HMI_SANITIZERS": "ON"}
+      "displayName": "Linux ASan and UBSan",
+      "binaryDir": "${sourceDir}/build/linux-sanitizers",
+      "cacheVariables": {"CONTEXT_HMI_SANITIZERS": true}
+    },
+    {
+      "name": "linux-mint-release",
+      "inherits": "release",
+      "displayName": "Linux Mint Release",
+      "description": "Portable glibc Linux release profile for Linux Mint validation",
+      "binaryDir": "${sourceDir}/build/linux-mint-release",
+      "installDir": "${sourceDir}/dist/linux-mint"
+    },
+    {
+      "name": "tcl-linux-release",
+      "inherits": "release",
+      "displayName": "TCL constrained Linux Release",
+      "description": "Generic constrained Linux display profile pending exact TCL device ABI",
+      "binaryDir": "${sourceDir}/build/tcl-linux-release",
+      "installDir": "${sourceDir}/dist/tcl-linux",
+      "cacheVariables": {
+        "BUILD_TESTING": false,
+        "CONTEXT_HMI_BUILD_BENCHMARKS": false,
+        "CONTEXT_HMI_CONSTRAINED": true
+      }
+    },
+    {
+      "name": "linux-release-tls",
+      "inherits": "release",
+      "displayName": "Linux Release with TLS provider",
+      "binaryDir": "${sourceDir}/build/linux-release-tls",
+      "installDir": "${sourceDir}/dist/linux-tls",
+      "cacheVariables": {"CONTEXT_HMI_ENABLE_TLS": true}
+    },
+    {
+      "name": "windows-mingw-release",
+      "inherits": "base",
+      "displayName": "Windows x64 MinGW cross-release",
+      "description": "Cross-compiled Windows artifact; does not execute Windows tests",
+      "binaryDir": "${sourceDir}/build/windows-mingw-release",
+      "installDir": "${sourceDir}/dist/windows-mingw",
+      "toolchainFile": "${sourceDir}/cmake/toolchains/mingw-w64-x86_64.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTING": false,
+        "CONTEXT_HMI_BUILD_BENCHMARKS": false,
+        "CONTEXT_HMI_ENABLE_TLS": false
+      }
+    },
+    {
+      "name": "windows-msvc-debug",
+      "inherits": "base",
+      "displayName": "Windows MSVC Debug",
+      "binaryDir": "${sourceDir}/build/windows-msvc-debug",
+      "condition": {"type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows"},
+      "cacheVariables": {"CMAKE_BUILD_TYPE": "Debug", "BUILD_TESTING": true}
+    },
+    {
+      "name": "windows-msvc-release",
+      "inherits": "base",
+      "displayName": "Windows MSVC Release",
+      "binaryDir": "${sourceDir}/build/windows-msvc-release",
+      "installDir": "${sourceDir}/dist/windows-msvc",
+      "condition": {"type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows"},
+      "cacheVariables": {"CMAKE_BUILD_TYPE": "Release", "BUILD_TESTING": true}
+    },
+    {
+      "name": "windows-server-release",
+      "inherits": "windows-msvc-release",
+      "displayName": "Windows Server Release",
+      "description": "Native Windows Server profile; runtime verification required",
+      "binaryDir": "${sourceDir}/build/windows-server-release",
+      "installDir": "${sourceDir}/dist/windows-server"
     }
   ],
   "buildPresets": [
-    {"name": "debug", "configurePreset": "debug"},
-    {"name": "release", "configurePreset": "release"},
-    {"name": "sanitizers", "configurePreset": "sanitizers"}
+    {"name": "debug", "configurePreset": "debug", "jobs": 2},
+    {"name": "release", "configurePreset": "release", "jobs": 2},
+    {"name": "sanitizers", "configurePreset": "sanitizers", "jobs": 2},
+    {"name": "linux-mint-release", "configurePreset": "linux-mint-release", "jobs": 2},
+    {"name": "tcl-linux-release", "configurePreset": "tcl-linux-release", "jobs": 2},
+    {"name": "linux-release-tls", "configurePreset": "linux-release-tls", "jobs": 2},
+    {"name": "windows-mingw-release", "configurePreset": "windows-mingw-release", "jobs": 2},
+    {"name": "windows-msvc-debug", "configurePreset": "windows-msvc-debug", "jobs": 2},
+    {"name": "windows-msvc-release", "configurePreset": "windows-msvc-release", "jobs": 2},
+    {"name": "windows-server-release", "configurePreset": "windows-server-release", "jobs": 2}
   ],
   "testPresets": [
-    {"name": "debug", "configurePreset": "debug", "output": {"outputOnFailure": true}},
-    {"name": "release", "configurePreset": "release", "output": {"outputOnFailure": true}},
-    {"name": "sanitizers", "configurePreset": "sanitizers", "output": {"outputOnFailure": true}}
+    {
+      "name": "debug",
+      "configurePreset": "debug",
+      "output": {"outputOnFailure": true},
+      "execution": {"noTestsAction": "error", "stopOnFailure": true}
+    },
+    {
+      "name": "release",
+      "configurePreset": "release",
+      "output": {"outputOnFailure": true},
+      "execution": {"noTestsAction": "error", "stopOnFailure": true}
+    },
+    {
+      "name": "sanitizers",
+      "configurePreset": "sanitizers",
+      "output": {"outputOnFailure": true},
+      "execution": {"noTestsAction": "error", "stopOnFailure": true}
+    },
+    {
+      "name": "linux-mint-release",
+      "configurePreset": "linux-mint-release",
+      "output": {"outputOnFailure": true},
+      "execution": {"noTestsAction": "error", "stopOnFailure": true}
+    },
+    {
+      "name": "windows-msvc-debug",
+      "configurePreset": "windows-msvc-debug",
+      "output": {"outputOnFailure": true},
+      "execution": {"noTestsAction": "error", "stopOnFailure": true}
+    },
+    {
+      "name": "windows-msvc-release",
+      "configurePreset": "windows-msvc-release",
+      "output": {"outputOnFailure": true},
+      "execution": {"noTestsAction": "error", "stopOnFailure": true}
+    },
+    {
+      "name": "windows-server-release",
+      "configurePreset": "windows-server-release",
+      "output": {"outputOnFailure": true},
+      "execution": {"noTestsAction": "error", "stopOnFailure": true}
+    }
+  ],
+  "packagePresets": [
+    {"name": "release", "configurePreset": "release", "generators": ["TGZ", "ZIP"]},
+    {"name": "tcl-linux-release", "configurePreset": "tcl-linux-release", "generators": ["TGZ"]},
+    {"name": "windows-mingw-release", "configurePreset": "windows-mingw-release", "generators": ["ZIP"]},
+    {"name": "windows-msvc-release", "configurePreset": "windows-msvc-release", "generators": ["ZIP"]},
+    {"name": "windows-server-release", "configurePreset": "windows-server-release", "generators": ["ZIP"]}
+  ],
+  "workflowPresets": [
+    {
+      "name": "linux-release",
+      "steps": [
+        {"type": "configure", "name": "release"},
+        {"type": "build", "name": "release"},
+        {"type": "test", "name": "release"},
+        {"type": "package", "name": "release"}
+      ]
+    },
+    {
+      "name": "windows-mingw-release",
+      "steps": [
+        {"type": "configure", "name": "windows-mingw-release"},
+        {"type": "build", "name": "windows-mingw-release"},
+        {"type": "package", "name": "windows-mingw-release"}
+      ]
+    }
   ]
 }

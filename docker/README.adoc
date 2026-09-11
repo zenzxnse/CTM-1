@@ -1,0 +1,69 @@
+= Container and Windows portability profiles
+
+Status:: Specified
+Date:: 2026-09-11
+
+== Rules provider on Linux
+
+[source,shell]
+----
+docker compose --profile rules build
+docker compose --profile rules up --wait
+curl --fail http://127.0.0.1:8080/api/v1/health
+docker compose --profile rules down
+----
+
+The container runs as UID/GID 65532 with a read-only root filesystem, no Linux
+capabilities, a bounded writable `/runtime` mount and a health check. Host port
+publishing is loopback-only by default. Use an explicit reverse proxy and security
+review before any remote exposure.
+
+== Constrained Linux
+
+[source,shell]
+----
+docker compose --profile constrained build
+docker compose --profile constrained up --wait
+----
+
+The constrained profile limits the service to one CPU, 256 MiB RAM and 96
+processes. It is a generic constrained Linux profile. Linux Mint and a TCL Linux
+display require execution on the named release and hardware before compatibility
+is claimed.
+
+== Local llama.cpp
+
+Keep a licensed GGUF model outside Git. Set `LLAMA_MODEL_DIR`,
+`LLAMA_MODEL_FILE`, `LLAMA_MODEL_ALIAS`, and preferably a digest-pinned
+`LLAMA_IMAGE` in a private `.env` file. The llama and service containers share a
+network namespace, so port 8081 is not published. The service sends only bounded
+retrieved context and the finite task contract. llama.cpp prompt caching and
+metrics are enabled in the container command; cache behavior still depends on the
+selected model and server build.
+
+[source,shell]
+----
+docker compose --profile llama up --build --wait
+curl --fail http://127.0.0.1:8080/api/v1/health
+----
+
+Record image digest, model SHA-256, model licence, quantization, chat template and
+server metrics for each inference run. The repository contains no weights.
+
+== Windows and Windows Server
+
+Docker Desktop runs the Linux container profiles. This verifies the container
+profile only, not native Windows behavior, EcoStruxure compatibility, or target
+panel rendering.
+
+[source,shell]
+----
+docker build --file docker/Dockerfile.windows-cross --target export \
+  --output type=local,dest=dist/windows-docker .
+----
+
+The output is a MinGW cross-compiled artifact and cannot run Linux tests. Execute
+the packaged executable and API checks on native Windows desktop and Windows
+Server before changing their evidence level. MSVC users use the
+`windows-msvc-debug`, `windows-msvc-release`, and `windows-server-release`
+presets from a Visual Studio developer shell.

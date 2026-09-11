@@ -1,0 +1,29 @@
+= ADR 0009: Configuration and container boundaries
+
+Status:: Accepted
+Date:: 2026-09-11
+
+== Context
+
+Command-line defaults alone are insufficient for repeatable deployments across native Linux,
+Windows and Docker Desktop. Secrets and runtime state must stay outside committed configuration.
+
+== Decision
+
+Ship a documented deployment YAML as an orchestration manifest and a strict JSON service
+configuration schema that the existing JSON dependency can validate. The YAML composes files,
+environment variables and command-line arguments. It is not parsed by an ad hoc YAML reader.
+Keys are supplied through environment variables or mounted secret files and never stored in
+the YAML. Private `project-state.yaml` records pause and resume status for development only.
+
+Provide a multi-stage Linux container running as a non-root user with a read-only root
+filesystem, writable bounded runtime mount, health check and explicit port binding. Provide
+separate Compose profiles for rules, local llama.cpp connectivity and a constrained display
+deployment. Windows Docker Desktop runs the Linux container profile. Native Windows binaries
+come from MSVC or MinGW and are verified separately.
+
+== Consequences
+
+The same release can be configured without recompiling or committing secrets. JSON is used for
+strict service input and YAML for operator orchestration. Docker does not prove native Windows,
+TCL panel, EcoStruxure or physical-controller compatibility.

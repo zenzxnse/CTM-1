@@ -1,0 +1,99 @@
+= ADR 0017: Standalone context HMI scope and provider efficiency
+
+Date:: 2026-09-11
+Status:: Accepted
+
+== Context
+
+The original implementation combined a laboratory simulator, optional protocol and
+display experiments, and the reusable operator workflow. That made the supported
+product boundary difficult to state and sent more machine context to an inference
+provider than an individual request required. The current product must be usable
+with a declared machine model and an external source of current telemetry. It must
+remain useful when inference is unavailable and must never let an LLM bind an
+arbitrary source or create control authority.
+
+Official Schneider material describes EcoStruxure Operator Terminal Expert as an HMI
+engineering and runtime product with screen design and data-access capabilities. It
+does not provide evidence of a public C++ runtime API in this repository. The
+supported boundary here is therefore a vendor-neutral engine and JSON screen
+contract, with vendor import or broker work remaining a separately evidenced adapter.
+
+== Decision
+
+Context HMI is a standalone C++20 service using Drogon for its HTTP boundary and a
+static SvelteKit workbench as its primary client. The service accepts a bounded,
+versioned machine-context JSON model and bounded external telemetry batches. It
+retrieves a relevant subgraph before interpretation, preserving candidate reasons,
+relationships, task vocabulary, truncation and context-size measurements. Native
+validation and binding resolution remain authoritative.
+
+The supported interpretation providers are:
+
+* `rules`, a deterministic local provider that is always available;
+* `llama`, an explicitly configured local llama.cpp OpenAI-compatible endpoint; and
+* an explicitly enabled remote OpenAI-compatible endpoint, including a Groq profile,
+  with credentials supplied only through the process environment.
+
+Provider requests place stable instructions and the finite output schema before
+variable retrieved context and the operator request. This ordering permits exact
+prefix caching where the provider supports it. The service also maintains bounded,
+revision-aware in-process caches for retrieval and validated interpretation. Cache
+keys include model identity, revision, context generation, provider and normalized
+request. Cache entries have a finite capacity and time-to-live, are cleared on model
+replacement, and never cache provider failures or secrets. Cache hits, misses,
+evictions, context bytes, estimated tokens, provider usage and elapsed time are
+returned as observable execution metadata.
+
+Telemetry is independent of inference. `POST /api/v1/telemetry` accepts a validated
+current batch; `GET /api/v1/telemetry` and `/api/v1/events` expose current values,
+quality, source timestamps and freshness. Missing or stale values remain explicit.
+Model revisions trigger revalidation and reconciliation of saved views. The
+declarative screen contract contains only reviewed catalog components and
+server-resolved bindings. No generated executable UI code is accepted.
+
+No pump-and-tank simulator, OPC UA client, LVGL renderer, command route, or
+EcoStruxure runtime adapter is part of this active product scope. Qt may consume the
+same JSON contract in a future client. Existing ADRs 0001, 0002, 0003, 0004, 0007,
+0008, 0009, 0011, 0013, 0014 and 0016 remain historical records; their conflicting
+simulator, protocol, display, command, or implementation details are superseded for
+the active build by this ADR. ADR 0015 remains the accepted Drogon boundary, and
+ADR 0012 remains the operational-store decision.
+
+== Public contract impact
+
+The `/api/v1` envelope and existing model, interpretation, resolution,
+reconciliation, health, telemetry and event routes remain versioned. The telemetry
+ingestion route and execution metadata are additive. A client must tolerate missing
+optional provider usage fields and must render stale, unknown, unavailable,
+clarification and provider-error states explicitly.
+
+== Security and privacy impact
+
+The engine never sends controller addresses, credentials, or unselected plant
+context to an inference provider. Remote inference is opt-in, requires TLS support,
+and is disabled unless the operator explicitly enables it. A key is read from the
+named environment variable and is never returned in an API response or log. The
+default bind remains loopback. A remote bind does not establish authentication.
+Inference has advisory authority only and cannot grant permissions or dispatch
+equipment actions.
+
+== Files and implementation boundary
+
+The active model and telemetry examples are under `examples/machines/`. Service
+configuration and deployment manifests are under `config/`, `schemas/`,
+`compose.yaml`, and the container files. C++ implementation is under
+`src/context_hmi/`; the workbench consumes the JSON contract under `workbench/`.
+Benchmarks record raw JSON and produce plots from measured runs only. Vendor
+compatibility notes belong in the documentation and retain product, version,
+format, provenance and evidence labels.
+
+== Verification still required
+
+The local service, complete API suite, release package, sanitizer profile and
+workbench checks must be rerun after the final source edit. Native Windows desktop
+and Windows Server execution, Linux Mint and the constrained TCL target require
+their named environments. A live llama.cpp model and any remote provider require a
+separate privacy-approved run. EcoStruxure compatibility remains unverified until
+an exact installed product version, reviewed source artifact and runtime test are
+available.

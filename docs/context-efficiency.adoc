@@ -1,0 +1,62 @@
+= Context interpretation and provider efficiency
+
+Status:: Accepted operating guidance
+Date:: 2026-09-11
+
+== Interpretation pipeline
+
+The request path is deliberately bounded:
+
+. Normalize the operator request without changing its meaning.
+. Search declared asset IDs, names, aliases, kinds, roles and relationships.
+. Rank candidates deterministically and retain reasons for inclusion and exclusion.
+. Expand only selected assets, their declared relationships, owned tags and alarms.
+. Limit context by item count and serialized bytes before calling a provider.
+. Ask the provider for a finite JSON task proposal, never executable UI or source bindings.
+. Validate model identity, revision, candidate membership, task kind and scope in C++.
+. Resolve tags and source references from the trusted model and compose the view.
+
+An empty or ambiguous candidate set returns clarification. A schema-valid selection
+outside the candidate set is an interpretation mismatch. A wrong but valid asset
+selection is recorded as an interpretation failure for evaluation.
+
+== Reducing provider work
+
+Stable system instructions, output schema and task vocabulary precede variable
+retrieved context and the operator request. This exact-prefix arrangement permits
+provider-side prompt caching. llama.cpp documents prompt caching and reusable cache
+slots; Groq documents exact-prefix caching for supported models. Provider behavior is
+version and model dependent, so the service exposes returned usage and cache fields
+without inventing them.
+
+The native service has two bounded caches:
+
+* retrieval results, keyed by normalized request and model generation;
+* validated provider task proposals, keyed by normalized request, provider and model
+  generation.
+
+Entries expire after a finite TTL and are evicted at capacity. Model replacement,
+revision changes and generation changes invalidate affected entries. Failures,
+credentials and raw plant source addresses are never cached in a response cache.
+Telemetry is not coupled to either cache. A cache hit still performs current native
+task validation and current binding resolution before publishing a view.
+
+== Observable execution metadata
+
+Every interpretation response may include retrieval candidates, selected scope,
+context bytes, estimated token count, truncation, cache hit or miss, provider usage,
+validation result, binding issues and elapsed stages. The workbench renders these
+fields as engineering evidence. Missing provider usage is shown as unavailable.
+
+== Source guidance
+
+* https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md[llama.cpp server documentation]
+  documents `--cache-prompt`, `--cache-reuse`, slot metrics and the OpenAI-compatible endpoint.
+* https://console.groq.com/docs/prompt-caching[Groq prompt caching documentation]
+  describes exact-prefix caching and recommends placing static instructions and tools
+  before dynamic user data.
+
+These sources establish transport and caching guidance only. They do not establish
+interpretation quality, industrial suitability, or compatibility with a particular
+model. Record model identity, weights, quantization, chat template, provider build,
+privacy approval and raw request metrics for each measured run.

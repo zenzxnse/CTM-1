@@ -1,0 +1,65 @@
+= ADR 0016: open62541 source adapter and LVGL native client
+
+Status:: Accepted
+Date:: 2026-09-11
+
+== Active-scope note
+
+This is a retained optional-dependency decision, not an active product claim. ADR
+0017 supersedes the open62541 and LVGL implementation scope for the standalone
+release; the pinned details remain available if a separately accepted future client
+or source adapter is resumed.
+
+== Context
+
+The architecture requires a real OPC UA source path and a constrained native renderer. The
+current simulator and browser prove neither open62541 connectivity nor LVGL rendering. Both
+features must remain separable so an on-premises service does not require a display and an edge
+client never receives controller credentials.
+
+== Decision
+
+Use open62541 1.5.4 at commit `dfd44a234645ed29cc6d190048bc8ae80c5454cd`, MPL-2.0, for
+an optional server-owned OPC UA client adapter. Enable the basic discovery option because
+open62541 1.5.4 uses it to include client sources, plus subscriptions and status-code
+descriptions. Disable multicast discovery, PubSub, methods, node management and examples.
+The pinned library also compiles server internals, but this application instantiates no OPC UA
+server. The
+adapter accepts only source references declared in a validated current machine model. It
+preserves data type, source timestamp, server timestamp and quality, bounds its update queue,
+marks values stale on disconnect and reconnects with bounded backoff. Writes are disabled.
+
+Use LVGL 9.5.0 at commit `85aa60d18b3d5e5588d7b247abf90198f07c8a63`, MIT licence,
+for an optional edge client. The client consumes versioned JSON screens and normalized
+telemetry, maps only reviewed catalog components, preserves stable component IDs and renders an
+explicit unsupported component when required. It has no inference, controller credentials or
+native command authority. Display/input drivers are selected by the target integrator; the
+portable build includes a bounded memory-display smoke target so rendering can be checked
+without claiming a physical panel.
+
+Both dependencies are pinned source inputs behind `CONTEXT_HMI_ENABLE_OPCUA` and
+`CONTEXT_HMI_ENABLE_LVGL`. Production Linux and Windows packages may provide matching CMake
+packages instead, but the exact resolved version is included in build evidence. Neither is
+enabled in the smallest server-only package.
+
+== Dependency gate
+
+Problems:: open62541 supplies a maintained OPC UA implementation with subscriptions and
+cross-platform plugins. LVGL supplies a portable constrained renderer and component toolkit.
+Alternatives:: A custom OPC UA stack is unsafe and disproportionate. A browser on the edge does
+not satisfy the native constrained-client boundary. Qt and SDL-only clients add broader desktop
+runtime dependencies. Simulator-only operation remains a useful fallback, not integration proof.
+Packaging:: Both upstream projects build with CMake on Linux and Windows. Exact target runtime
+evidence still requires the selected operating system, network policy and display/input driver.
+Pinning:: The immutable commits above are recorded in CMake. No release branch is followed.
+Upgrade:: Review ABI/API, security notes and licence changes, update the commit, rebuild every
+profile, run source/reconnect/render tests and refresh the third-party inventory.
+Removal:: Disable the feature option and remove only its adapter or client target. Core model,
+JSON contracts, simulator and browser remain usable.
+
+== Consequences
+
+The project can exercise a concrete read/subscription path and native component renderer while
+keeping them optional. An open62541 build is not evidence of connectivity to a particular PLC.
+An LVGL memory-display smoke run is not evidence for a TCL panel. Those gates stay explicit in
+the compatibility report.

@@ -1,0 +1,24 @@
+= Platform support matrix
+
+Version:: 1.1.0
+Date:: 2026-09-11
+
+[cols="2,2,3",options="header"]
+|===
+|Target |Evidence level |Required next evidence
+|Current Ubuntu 24.04 host |Pending final native verification |Final Debug, Release, sanitizer, package and API run
+|Linux Mint |Specified compatible profile |Execute package on the exact Mint release and record libc, CPU and tests
+|TCL Linux display |Generic constrained profile |Identify device, CPU, ABI, compositor, browser and installation mechanism; execute there
+|Windows x64 MinGW |Cross-build profile |Build, inspect PE artifact, then execute API tests on native Windows
+|Windows x64 MSVC |Specified native preset |Configure, build and test in a supported Visual Studio developer shell
+|Windows Server |Specified native preset |Execute service, restart, firewall and API checks on the named Server release
+|Docker Engine Linux |Specified hardened container |Build, health-check, command and restart checks
+|Docker Desktop Windows |Specified Linux-container profile |Run the same checks under Docker Desktop on Windows
+|EcoStruxure Operator Terminal Expert 4.1 |Documented JSON boundary only |Installed product, reviewed export and native/runtime test
+|AVEVA Operations Control |Documented JSON boundary only |Named product/version, licensed interface and real endpoint or export
+|Ignition Perspective |Documented JSON boundary only |Installed gateway/modules, project, role/session and bounded HTTP message test
+|===
+
+Cross-compilation, a common protocol, vendor documentation and corporate ownership are not
+runtime compatibility. See link:evidence-conventions.adoc[evidence labels] and
+link:api-investigation.adoc[the provider and vendor research].

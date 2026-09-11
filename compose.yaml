@@ -1,0 +1,144 @@
+name: context-hmi
+
+x-service-security: &service-security
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=32m
+    - /runtime:rw,noexec,nosuid,size=16m,uid=65532,gid=65532,mode=0700
+  restart: unless-stopped
+
+x-service-command: &service-command
+  - --config
+  - /opt/context-hmi/share/context-hmi/config/context-hmi.json
+  - --host
+  - 0.0.0.0
+  - --allow-remote
+  - --model
+  - /opt/context-hmi/share/context-hmi/examples/machines/assembly-line.json
+  - --models
+  - /opt/context-hmi/share/context-hmi/examples/machines
+  - --web-dir
+  - /opt/context-hmi/share/context-hmi/workbench
+  - --store-file
+  - /runtime/operations.chj
+  - --log-file
+  - /runtime/diagnostics.jsonl
+
+services:
+  context-hmi:
+    <<: *service-security
+    profiles: [rules]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        CONTEXT_HMI_CONSTRAINED: OFF
+        CONTEXT_HMI_ENABLE_TLS: OFF
+    image: context-hmi:0.3.0
+    command: *service-command
+    ports:
+      - 127.0.0.1:${CONTEXT_HMI_PORT:-8080}:8080
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://127.0.0.1:8080/api/v1/health]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  context-hmi-constrained:
+    <<: *service-security
+    profiles: [constrained]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        CONTEXT_HMI_CONSTRAINED: ON
+        CONTEXT_HMI_ENABLE_TLS: OFF
+    image: context-hmi:0.3.0-constrained
+    command: *service-command
+    mem_limit: 256m
+    cpus: 1.0
+    pids_limit: 96
+    ports:
+      - 127.0.0.1:${CONTEXT_HMI_PORT:-8080}:8080
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://127.0.0.1:8080/api/v1/health]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  llama:
+    profiles: [llama]
+    image: ${LLAMA_IMAGE:-ghcr.io/ggml-org/llama.cpp:server}
+    command:
+      - --model
+      - ${LLAMA_MODEL_FILE:-/models/operator-model.gguf}
+      - --alias
+      - ${LLAMA_MODEL_ALIAS:-context-hmi-local}
+      - --host
+      - 127.0.0.1
+      - --port
+      - "8081"
+      - --ctx-size
+      - "4096"
+      - --parallel
+      - "2"
+      - --cache-prompt
+      - --metrics
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - ${LLAMA_MODEL_DIR:-./models}:/models:ro
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://127.0.0.1:8081/health]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+
+  context-hmi-llama:
+    <<: *service-security
+    profiles: [llama]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        CONTEXT_HMI_CONSTRAINED: OFF
+        CONTEXT_HMI_ENABLE_TLS: OFF
+    image: context-hmi:0.3.0
+    network_mode: service:llama
+    depends_on:
+      llama:
+        condition: service_healthy
+    command:
+      - --config
+      - /opt/context-hmi/share/context-hmi/config/context-hmi.json
+      - --host
+      - 0.0.0.0
+      - --allow-remote
+      - --model
+      - /opt/context-hmi/share/context-hmi/examples/machines/assembly-line.json
+      - --models
+      - /opt/context-hmi/share/context-hmi/examples/machines
+      - --web-dir
+      - /opt/context-hmi/share/context-hmi/workbench
+      - --store-file
+      - /runtime/operations.chj
+      - --log-file
+      - /runtime/diagnostics.jsonl
+      - --provider-url
+      - http://127.0.0.1:8081/v1/chat/completions
+      - --provider-model
+      - ${LLAMA_MODEL_ALIAS:-context-hmi-local}
+      - --provider-timeout-ms
+      - "10000"
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://127.0.0.1:8080/api/v1/health]
+      interval: 10s
+      timeout: 3s
+      retries: 8
+    ports:
+      - 127.0.0.1:${CONTEXT_HMI_PORT:-8080}:8080

@@ -1,0 +1,28 @@
+= ADR 0010: Benchmark visualization dependency
+
+Status:: Accepted
+Date:: 2026-09-11
+
+== Context
+
+The user requested matplotlib plots beside raw benchmark results. The standard library can
+write CSV and SVG manually, but that would create and maintain a custom chart renderer.
+
+== Decision
+
+Use matplotlib 3.11.1 as an optional benchmark-development dependency for Python 3.11 or newer.
+It uses the Matplotlib licence. Pin it exactly in the benchmark extra. The native runtime,
+service package and container do not depend on Python or matplotlib. Plot generation reads
+checked-in raw JSON, uses a non-interactive backend and emits deterministic SVG and PNG assets.
+
+Alternatives considered were handwritten SVG, gnuplot and embedding a browser chart. Handwritten
+SVG adds bespoke rendering logic; gnuplot is not present; a browser chart would mix product UI
+with reproducibility tooling. Upgrade by changing the pin after regenerating plots and checks.
+Remove it by retaining raw JSON and deleting only the plot generator and derived images.
+
+== Consequences
+
+Reviewers can inspect both exact samples and accessible plots. Installing benchmark extras
+pulls matplotlib's own dependencies, but production artifacts remain unaffected. A plot is
+evidence only for the raw run it names and cannot fill in missing platform measurements.
+

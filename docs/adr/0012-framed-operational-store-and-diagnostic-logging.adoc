@@ -1,0 +1,42 @@
+= ADR 0012: Framed operational store and diagnostic logging
+
+Status:: Accepted
+Date:: 2026-09-11
+
+== Context
+
+Diagnostic messages and operational evidence have different loss and recovery requirements. A
+text log is useful to people, but appending a line does not provide framed recovery, corruption
+detection or a stable replay contract. SQLite was considered and explicitly declined by the user.
+
+== Decision
+
+Implement a small append-only operational journal without a third-party storage dependency. The
+file begins with a versioned magic header. Each record has a fixed little-endian frame containing
+its sequence, record kind, payload length and CRC-32C over the kind and canonical JSON payload.
+Payloads and total scan work are bounded. Append writes the whole frame, flushes the language
+buffer, then calls the platform durability primitive when synchronous durability is configured.
+Required command intent must be durable before simulator mutation.
+
+Startup scans frames in sequence. A partial final header or payload is a torn tail and is truncated
+to the last complete frame. A checksum mismatch, invalid length, duplicate sequence or corruption
+before the tail fails the store. Replay rebuilds only bounded indexes required for idempotency and
+recent operational records. No silent overwrite or best-effort downgrade is allowed.
+
+Diagnostic logging is separate. It writes structured JSON Lines through a bounded asynchronous
+queue with rotation. Low-severity diagnostics may be dropped on overflow and increment a visible
+counter. Error diagnostics fall back to synchronous standard error. Operational records never use
+that lossy queue.
+
+== Alternatives
+
+SQLite provides mature transactions but was declined. A JSON Lines audit file lacks reliable
+framing and torn-tail recovery. A new general-purpose database would be outside the product need.
+This journal intentionally implements only append, replay and bounded recent lookup.
+
+== Consequences
+
+The service can restore command idempotency and retain model, task, approval and outcome evidence
+without presenting itself as a general storage engine. Compaction, encryption at rest, concurrent
+multi-process writers, replication and historian workloads are out of scope. The runtime directory
+must be protected by operating-system permissions.

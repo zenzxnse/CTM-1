@@ -1,0 +1,41 @@
+= ADR 0014: EcoStruxure symbol-file integration
+
+Status:: Accepted
+Date:: 2026-09-11
+
+== Active-scope note
+
+This record defines a possible reviewed engineering-artifact interoperability path,
+not an active vendor runtime integration. ADR 0017 keeps it outside the active
+release until the named product, artifact and execution evidence are available.
+
+== Context
+
+The first exact target is EcoStruxure Operator Terminal Expert 4.1. Schneider documents importing a
+controller under `Variables > Symbol Link` with the `SoMachine Symbol File` format. Schneider's
+Machine Expert documentation says code generation emits an XML symbol file and its Symbol
+Configuration editor can save the matching XSD for external programs.
+
+== Decision
+
+Use the generated CODESYS-compatible XML symbol configuration as the shared read-only engineering
+source. Context HMI and Operator Terminal Expert consume the same export. A bounded parser accepts
+the versioned `Symbolconfiguration`, `TypeList` and `NodeList` structure and emits a symbol inventory.
+It never infers asset ownership, engineering units, process roles or relationships from dotted names.
+A separate reviewed mapping file supplies those semantics and produces the vendor-context envelope.
+
+The import records the source SHA-256, product `EcoStruxure Operator Terminal Expert`, requested
+version `4.1`, compiler/schema metadata and every unresolved symbol. Unknown types, writes, callable
+symbols, direct I/O and unmapped identities remain unavailable. XML external entities and DTDs are
+rejected. Input depth, nodes, attributes and text are bounded.
+
+The parser is an interoperability path, not installed-product proof. OTE execution requires an
+actual Machine Expert symbol XML, its exported XSD, the matching OTE project and a run on the named
+4.1 installation. Native project generation remains unimplemented because no documented OTE project
+generation API or licensed SDK has been provided.
+
+== Consequences
+
+The project can compare its inventory with the symbols imported by OTE without reverse engineering
+an OTE project. A synthetic fixture exercises the path now. Product compatibility remains
+`Unverified` until the real artifact and runtime gate are completed.

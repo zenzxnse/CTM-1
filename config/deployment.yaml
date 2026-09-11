@@ -1,0 +1,44 @@
+schema_version: 1
+profile: rules
+service:
+  config: config/context-hmi.json
+  bind: 127.0.0.1:8080
+  model: examples/machines/assembly-line.json
+  models_dir: examples/machines
+  watch_model: true
+  model_rescan_ms: 500
+  web_dir: workbench/build
+  operational_store: .runtime/operations.chj
+  operational_store_sync: true
+  diagnostic_log: .runtime/diagnostics.jsonl
+  diagnostic_queue_capacity: 1024
+  diagnostic_rotation_bytes: 8388608
+  diagnostic_rotation_files: 3
+inference:
+  mode: rules
+  local_llama:
+    endpoint: http://127.0.0.1:8081/v1/chat/completions
+    model: context-hmi-local
+    model_file: models/operator-model.gguf
+    key_env: ""
+  groq_optional:
+    enabled: false
+    endpoint: https://api.groq.com/openai/v1/chat/completions
+    model: openai/gpt-oss-20b
+    key_env: GROQ_API_KEY
+    requires_plant_context_approval: true
+cache:
+  retrieval_capacity: 256
+  interpretation_capacity: 128
+  ttl_seconds: 300
+runtime:
+  paused: false
+  read_only_vendor_adapters: true
+  telemetry_ingestion: true
+evidence:
+  linux_native: pending_current_run
+  linux_mint_profile: requires_native_target_run
+  tcl_linux_profile: generic_until_device_known
+  windows_mingw: cross_compile_only
+  windows_msvc: requires_native_windows
+  windows_server: requires_native_windows_server

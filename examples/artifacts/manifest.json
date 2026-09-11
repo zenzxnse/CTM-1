@@ -1,0 +1,18 @@
+{
+  "schema_version": "engineering-bundle/1",
+  "machine": {
+    "id": "assembly-line-a",
+    "name": "Assembly Line A",
+    "description": "Declared engineering context for a production line.",
+    "revision": 1
+  },
+  "artifacts": [
+    {"id": "assets", "kind": "asset_hierarchy", "format": "json", "path": "assets.json"},
+    {"id": "links", "kind": "relationships", "format": "csv-rfc4180", "path": "relationships.csv"},
+    {"id": "tags", "kind": "controller_tags", "format": "csv-rfc4180", "path": "tags.csv"},
+    {"id": "io", "kind": "io_configuration", "format": "csv-rfc4180", "path": "io.csv"},
+    {"id": "alarms", "kind": "alarm_definitions", "format": "csv-rfc4180", "path": "alarms.csv"},
+    {"id": "communications", "kind": "communications", "format": "json", "path": "communications.json"},
+    {"id": "documents", "kind": "machine_documents", "format": "json", "path": "documents.json"}
+  ]
+}

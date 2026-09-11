@@ -1,0 +1,41 @@
+= ADR 0008: Vendor-neutral integration and evidence
+
+Status:: Accepted
+Date:: 2026-09-11
+
+== Context
+
+The requested targets include EcoStruxure, AVEVA Operations Control and Ignition Perspective.
+The supplied materials describe possible integration surfaces, but they do not provide an
+installed product, licensed SDK, real export or test gateway. HADS was also supplied as a
+documentation example.
+
+== Decision
+
+Use one versioned, vendor-neutral machine-context envelope for offline imports and broker
+adapters. An import records vendor, product, product version, export format, source digest,
+timestamp, provenance, completeness, stable asset mappings and unresolved fields. Flat tag
+names, display paths and namespace indexes never create physical ownership or relationships.
+
+Publish documented mapping profiles and representative synthetic fixtures for:
+
+* Schneider EcoStruxure Operator Terminal Expert and Machine SCADA Expert;
+* AVEVA Operations Control 2026 file/model exchange surfaces;
+* Ignition 8.1 gateway-side HTTP messaging and reviewed tag metadata;
+* the common native JSON model used by Context HMI.
+
+Profiles are read-only until tested against the exact product. No proprietary project format
+is guessed or reverse engineered. An Ignition adapter runs server-side, reuses a bounded HTTP
+client and routes results to scoped Perspective sessions. Browser roles never grant access.
+
+HADS 1.0.0 at commit `dcfe582df90c8a276690fd05ebe4819d4ba12c36` is integrated as a
+documentation influence only. Public AsciiDoc uses explicit `Verified`, `Specified`, `Known
+failure`, and `Unverified` evidence labels with a reading instruction. No HADS code is copied,
+no Markdown validator is run over AsciiDoc, and no formal HADS conformance is claimed.
+
+== Consequences
+
+The repository can exercise mappings and missing-data behavior without false vendor claims.
+Real compatibility remains gated by installed versions, licences, sample exports, credentials,
+network policy and execution evidence. The HADS concepts make uncertainty visible while
+preserving the project's accepted AsciiDoc format.

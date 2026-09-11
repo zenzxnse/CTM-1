@@ -1,0 +1,29 @@
+= Evidence and compatibility labels
+
+Version:: 1.0.0
+Status:: Accepted
+Date:: 2026-09-11
+
+== Reading instruction
+
+Read `Specified` and `Known failure` blocks as authoritative project contracts. Read `Verified`
+blocks as evidence limited to the named environment and commands. Treat `Unverified` blocks as
+hypotheses or remaining gates. Narrative context cannot override an accepted ADR.
+
+This convention adapts the separation encouraged by HADS 1.0.0 to this project's required
+AsciiDoc format. It is not formal HADS compliance.
+
+== Labels
+
+Specified:: An accepted contract or reproducible configuration. It is not necessarily executed.
+Verified:: Behavior observed from a named artifact with preserved commands and results.
+Known failure:: A reproduced failure with symptom, cause and fix or current containment.
+Unverified:: An inference, vendor claim, unexecuted platform, missing environment fact or proposal.
+
+== Compatibility rule
+
+A compatibility statement names the exact product, version, operating system, architecture,
+toolchain, configuration and evidence level. `Cross-compiled` and `container-tested` are distinct
+from `native runtime verified`. Company ownership, protocol availability and documentation-only
+research are never converted into a tested compatibility claim.
+

@@ -1,0 +1,39 @@
+= ADR 0007: Simulator command gateway and audit
+
+Status:: Accepted
+Date:: 2026-09-11
+
+== Active-scope note
+
+This is a historical command design. ADR 0017 supersedes the simulator command
+gateway for the active standalone release. The audit and operational-store decisions
+remain relevant to required records, but no command route is active.
+
+== Context
+
+The earlier service exposed a laboratory pause switch but had no explicit command lifecycle,
+idempotency or audit evidence. A visible control must not imply physical PLC authority.
+
+== Decision
+
+Add a simulator-only command gateway for `simulation.start` and `simulation.stop`. A request
+contains a bounded idempotency key, declared command, expected session and context generation,
+and explicit operator confirmation. The server derives the actor from the local configured
+configured local role and does not trust a browser-supplied identity. Commands are rejected when identity,
+generation, confirmation or capability is missing.
+
+Results distinguish `accepted`, `completed`, `rejected`, and `unknown`. For the in-process
+simulator, completion includes observed simulator state. Keep a bounded in-memory idempotency
+and audit ledger and expose a bounded read-only audit route. Optional append-only audit output
+is written before state mutation and flushed before success. If durable audit is configured
+and cannot be written, reject the action. The existing `/simulation` route remains compatible
+but is marked as a laboratory compatibility control, not the audited command contract.
+
+No physical write, setpoint, recipe, alarm acknowledgement or emergency action is added.
+Inference is absent from the command path.
+
+== Consequences
+
+The earlier implementation can show a truthful command lifecycle and duplicate-request behavior. Local file audit
+is not a database and does not promise crash-atomic recovery. Any real equipment command needs
+authentication, authorization, protocol acknowledgement, safe-state requirements and a new ADR.

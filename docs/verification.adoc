@@ -1,38 +1,33 @@
-= Prototype verification
+= Verification record
 
-Date:: 2026-09-10
+Date:: 2026-09-11
+Status:: Pending final source-tree verification
 
-This record covers the first local PS2 prototype. It distinguishes native behavior,
-provider-contract tests, build checks and work that still needs target equipment.
+This record is intentionally a procedure until the final shared-tree build and
+tests are run. It distinguishes specified build profiles from observed behavior.
 
-== Environment
-
-Linux x86_64; GCC 13.3.0; CMake 4.4.3; Ninja 1.13.2; Python 3.12.14;
-Node.js 24.19.0; npm 11.9.0; clang-format 23.1.0; Ruff 0.16.6; Pyright 1.1.414.
-Frontend dependency versions and integrity hashes are in `workbench/package-lock.json`.
-
-== Completed checks
+== Required checks
 
 [cols="2,3",options="header"]
 |===
-|Check |Observed result
-|Native Debug and Release |Configured and built. Four CTest suites passed: engine, adversarial, API and inference.
-|Live API and provider contract |13 Python tests passed against the compiled native service. Provider tests use a local mock HTTP server.
-|Installed native artifact |Installed with CMake to a separate prefix. All 13 API/provider tests passed with the installed executable and fixtures.
-|Static file serving |The installed service returned its HTML, eight linked assets and a ready four-component task view over same-origin HTTP.
-|C++ sanitizers |AddressSanitizer and UndefinedBehaviorSanitizer suites passed with leak detection disabled for this workspace.
-|SvelteKit |`svelte-check` reported zero errors and warnings. The static build completed.
-|Python checks |Ruff, Pyright standard checking and bytecode compilation passed.
-|Native formatting |clang-format dry-run completed without formatting errors.
-|Smoke benchmark |Seven trials per metric, 700 samples per metric, raw timings and source hashes saved under `benchmarks/`.
+|Check |Evidence to record
+|Native Linux Debug and Release |CMake configure output, build output, test case count and API run
+|Sanitizer profile |Address and undefined behavior results, including environment limitations
+|Workbench |Dependency lock check, type check, format check and static build output
+|Telemetry workflow |Accepted and rejected ingestion, freshness, unknown values and event stream
+|Interpretation efficiency |Cold and warm cache metadata, context size, provider usage and timing
+|Reconciliation |Model revision, changed binding, explicit issue and current generation
+|Operational journal |Replay, checksum and torn-tail behavior with required records preserved
+|Package smoke |Installed executable, resources, read-only runtime and health endpoint
+|Windows x64 |Native MSVC Debug/Release execution and API checks
+|Windows Server |Native service, restart, firewall and API checks on a named release
+|Docker Linux |Container health, non-root identity, readiness and runtime write behavior
+|Docker Desktop Windows |Same container checks performed through Docker Desktop
+|Linux Mint and TCL Linux |Named release, ABI, CPU and package execution
+|Vendor compatibility |Exact product/version, reviewed artifact and runtime evidence
 |===
 
-The source bundle includes this record. Its accompanying delivery verification file
-records the archive checksum and checks performed after extraction into a clean directory.
-
-== Reproduce the main checks
-
-Run from the project root with the prerequisites listed in the README:
+== Reproduction commands
 
 [source,shell]
 ----
@@ -40,45 +35,25 @@ npm --prefix workbench ci
 npm --prefix workbench run check
 npm --prefix workbench run format:check
 npm --prefix workbench run build
+cmake --preset debug
+cmake --build --preset debug --parallel 2
+ctest --preset debug
 cmake --preset release
 cmake --build --preset release --parallel 2
 ctest --preset release
-python3 -m ruff check tests tools benchmarks
-python3 -m compileall -q tests tools benchmarks
-npm exec --yes --package=pyright -- pyright
-clang-format --dry-run --Werror src/context_hmi/*.cpp src/context_hmi/*.hpp tests/*.cpp tools/*.cpp
-cmake --install build/release --prefix ./build/installed
+python3 benchmarks/live.py --build-dir build/linux-release \
+  --save build/benchmarks/live.json
 ----
 
-The Python integration suites launch temporary loopback services. A missing native
-executable fails verification; these suites do not silently skip unavailable binaries.
-The two native test executables use explicit checks that remain active in Release builds.
+Only the release owner runs these commands. A compile is not a test, a container
+health check is not native Windows evidence, and a mock provider is not a live
+llama.cpp interoperability result.
 
-== Sanitizer limitation
+== Current limitations
 
-The first sanitizer run could not complete LeakSanitizer's process inspection in this
-managed workspace. It reported a ptrace/proc access failure. The following run retained
-address and undefined-behavior checks and passed all four suites:
-
-[source,shell]
-----
-cmake --preset sanitizers
-cmake --build --preset sanitizers --parallel 2
-ASAN_OPTIONS=detect_leaks=0 ctest --preset sanitizers
-----
-
-This is not evidence of leak freedom. Leave leak detection enabled when running on a
-host that supports it. The project preset does not globally disable leak detection.
-
-== Limits of this evidence
-
-* No live llama.cpp binary or model was run. The wire format was checked against official
-  source; the native client's response and failure handling were tested with mock responses.
-* No OPC UA server, physical PLC, Schneider editor/runtime or LVGL client was exercised.
-* Windows and compact-panel compatibility remain unverified.
-* Browser interaction, visual layout, animation and optional browser tool registration
-  have not been exercised in a browser. Build and static HTTP checks are not browser QA.
-* Test fixtures are authored examples. They do not establish interpretation accuracy on
-  unfamiliar requests, plant data, or configuration edits held out from development.
-* No full request-to-paint latency, process memory, throughput or engineering-effort
-  comparison is claimed. The native benchmark has a separate, narrow measurement contract.
+No live machine, controller, EcoStruxure runtime, AVEVA runtime, Ignition gateway,
+native Windows host or TCL device is available in this record. No claim is made for
+industrial certification, process safety, dimensional unit conversion, historian
+retention or provider interpretation quality on held-out requests. A live provider
+run must record model weights, chat template, provider version, privacy approval and
+raw usage metadata.

@@ -1,0 +1,33 @@
+= ADR 0013: Relevant context retrieval and semantic validation
+
+Status:: Accepted
+Date:: 2026-09-11
+
+== Context
+
+Sending the complete declared model to an LLM does not scale and exposes irrelevant plant context.
+Schema validation alone cannot detect a wrong but valid asset selection. The deterministic resolver
+can reject unknown identities but needs retrieval evidence to reject an unrelated known identity.
+
+== Decision
+
+Build a bounded relevant-context subgraph before provider inference. Retrieval normalizes a small,
+documented industrial vocabulary, scores declared IDs, names, aliases, kinds and measurement roles,
+and returns deterministic candidates with reasons. It expands only the selected candidates' direct
+relationships, owned tags and alarms. Protocol addresses and credentials are excluded.
+
+The provider receives the operator request, finite task vocabulary and retrieved subgraph. Its ready
+task is accepted only when model identity and revision match and any selected asset is one of the
+retrieval candidates. A prompt that identifies multiple equal candidates remains clarification.
+A provider selecting another existing asset produces `interpretation_mismatch` and no view.
+
+Return retrieval evidence with interpretation responses and through a read-only retrieval endpoint
+so the workbench can show candidate scope, exclusions and truncation. Native resolution remains
+the sole source of concrete bindings.
+
+== Consequences
+
+Inference payload size is bounded by relevance instead of plant size. The retrieval vocabulary is
+not a general language model and held-out evaluation must count wrong-scope answers as failures.
+Zero or ambiguous evidence produces clarification. New synonyms and scoring changes require tests
+because they can change safety-relevant scope.

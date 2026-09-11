@@ -1,0 +1,27 @@
+[
+  {
+    "id": "line-a",
+    "name": "Assembly Line A",
+    "kind": "production_line",
+    "aliases": ["main line", "line one"],
+    "description": "Primary material flow line."
+  },
+  {
+    "id": "conveyor-a1",
+    "name": "Infeed Conveyor A1",
+    "kind": "conveyor",
+    "aliases": ["infeed", "entry conveyor"]
+  },
+  {
+    "id": "oven-a1",
+    "name": "Cure Oven A1",
+    "kind": "oven",
+    "aliases": ["cure oven", "oven one"]
+  },
+  {
+    "id": "inspection-a1",
+    "name": "Vision Inspection A1",
+    "kind": "inspection_cell",
+    "aliases": ["quality camera", "inspection"]
+  }
+]

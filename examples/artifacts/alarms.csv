@@ -1,0 +1,4 @@
+id,asset_id,name,tag_id,operator,threshold,severity
+oven-a1.high-temperature,oven-a1,High process temperature,oven-a1.temperature,>=,205,high
+conveyor-a1.high-load,conveyor-a1,High conveyor load,conveyor-a1.load,>=,85,medium
+inspection-a1.high-reject-rate,inspection-a1,High reject rate,inspection-a1.reject-rate,>=,4,medium

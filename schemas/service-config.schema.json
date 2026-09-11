@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hmisol.local/schemas/service-config.schema.json",
+  "title": "Context HMI service configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "host": {"type": "string", "minLength": 1, "maxLength": 255},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+        "allow_remote": {"type": "boolean"},
+        "workbench_origin": {"type": "string", "maxLength": 4096},
+        "web_dir": {"type": "string", "maxLength": 4096}
+      }
+    },
+    "machine": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "models_dir": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "watch": {"type": "boolean"},
+        "rescan_ms": {"type": "integer", "minimum": 100, "maximum": 60000}
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "stale_after_ms": {"type": "integer", "minimum": 100, "maximum": 300000},
+        "max_values": {"type": "integer", "minimum": 1, "maximum": 4096},
+        "max_batch_bytes": {"type": "integer", "minimum": 1024, "maximum": 1048576}
+      }
+    },
+    "cache": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "retrieval_capacity": {"type": "integer", "minimum": 1, "maximum": 4096},
+        "interpretation_capacity": {"type": "integer", "minimum": 1, "maximum": 4096},
+        "ttl_seconds": {"type": "integer", "minimum": 1, "maximum": 86400}
+      }
+    },
+    "inference": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "endpoint": {"type": "string", "maxLength": 4096},
+        "model": {"type": "string", "minLength": 1, "maxLength": 256},
+        "timeout_ms": {"type": "integer", "minimum": 100, "maximum": 30000},
+        "context_bytes": {"type": "integer", "minimum": 1024, "maximum": 65536},
+        "max_output_tokens": {"type": "integer", "minimum": 64, "maximum": 2048},
+        "allow_remote": {"type": "boolean"},
+        "key_env": {"type": "string", "pattern": "^$|^[A-Z_][A-Z0-9_]{0,127}$"}
+      }
+    },
+    "audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "actor": {"type": "string", "minLength": 1, "maxLength": 128}
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "file": {"type": "string", "maxLength": 4096},
+        "synchronize": {"type": "boolean"},
+        "maximum_bytes": {"type": "integer", "minimum": 1048576, "maximum": 4294967296}
+      }
+    },
+    "diagnostics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "file": {"type": "string", "maxLength": 4096},
+        "queue_capacity": {"type": "integer", "minimum": 16, "maximum": 65536},
+        "rotation_bytes": {"type": "integer", "minimum": 4096, "maximum": 2147483647},
+        "rotation_files": {"type": "integer", "minimum": 1, "maximum": 32}
+      }
+    }
+  }
+}

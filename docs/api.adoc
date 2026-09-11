@@ -1,114 +1,108 @@
 = Context HMI local API
 
-Status:: Accepted for the PS2 prototype
+Status:: Accepted active contract
+Date:: 2026-09-11
 
-Date:: 2026-09-10
-
-The native service listens on `127.0.0.1:8080` by default. All routes use the
-`/api/v1` prefix and JSON. The service is simulation-only and has no PLC or
-physical equipment command route.
+The native service listens on `127.0.0.1:8080` by default. Routes use the
+`/api/v1` prefix and JSON. The service accepts reviewed machine context and
+external current telemetry. It does not expose physical controller commands.
 
 == Runtime identity
 
-Each process creates one `session_id`. The active model starts at
-`context_generation: 0`; selecting a scenario increments that generation and
-resets the simulation tick. `/health`, `/model`, and `/telemetry` expose the
-session and generation. The service keeps canonical generated views in an
-in-memory cache of at most 64 entries. View and session state is lost when the
-process exits.
+Each process publishes a `session_id`, active `model_id`, model revision and
+`context_generation`. A model replacement increments the generation and causes
+saved views and caches to be revalidated. Canonical views remain bounded and
+server-authoritative. Session and view records are process-local.
 
 == Read routes
 
-`GET /api/v1/health` returns service and simulation state:
+`GET /api/v1/health` reports service, provider, model and telemetry state. It does
+not claim that a provider is ready merely because the service is alive.
+`GET /api/v1/session` returns the bounded local session identity and server-issued
+capabilities. It is not production authentication.
+`GET /api/v1/ready` reports readiness for the active model and current telemetry.
+`GET /api/v1/model` returns the validated model with runtime identity fields.
+`GET /api/v1/catalog` returns the reviewed screen component catalog and supported
+client declarations. `GET /api/v1/scenarios` returns the available reviewed model
+configurations. `GET /api/v1/metrics` reports cache, queue, provider and telemetry
+counters. `GET /api/v1/audit` and `GET /api/v1/records` return bounded operational
+and journal evidence when configured.
+
+`GET /api/v1/telemetry` returns current values, quality, source timestamps,
+receive age and alarms. `GET /api/v1/events` streams bounded current snapshots as
+`text/event-stream`; it is not a durable event log.
+
+== Telemetry ingestion
+
+`POST /api/v1/telemetry` accepts a bounded current batch. The batch must identify
+the active model and revision and contain only declared tag IDs. Values must match
+declared data types. Each value preserves quality and an unsigned source timestamp in
+milliseconds. The batch sequence is carried at the top level. The whole batch is
+validated before it replaces the current snapshot. Missing values are unknown and
+values older than the configured freshness
+window are stale. The route does not store a historian.
 
 [source,json]
 ----
 {
-  "version": "0.1.0",
-  "interpreter": "rules",
-  "llama_configured": false,
-  "mode": "simulation",
-  "active_scenario": "pump-station",
-  "session_id": "session-...",
+  "schema_version": "context-hmi-telemetry/1",
+  "model_id": "assembly-line-a",
+  "model_revision": 1,
   "context_generation": 0,
-  "simulation_running": true
+  "source_id": "line-gateway",
+  "sequence": 42,
+  "values": {
+    "line-a.throughput": {"value":42.5,
+      "quality":"good", "timestamp_ms":1789084800000}
+  }
 }
 ----
 
-`GET /api/v1/model` returns the active declared model, plus
-`session_id` and `context_generation` fields. `GET /api/v1/scenarios` returns
-valid files from the configured model directory. Each item contains `id`
-(the file stem), `model_id`, `revision`, `name`, and `description`.
-
-`GET /api/v1/telemetry` returns a current snapshot with `model_id`,
-`model_revision`, `tick`, `quality`, `values`, `alarms`, `session_id`, and
-`context_generation`. `GET /api/v1/events` streams the same current-value
-snapshot as `text/event-stream` events named `telemetry`. It is not a durable
-event log. At most three SSE clients are active at once.
-
 == Interpretation and views
 
-Mutation routes require a content type beginning with `application/json`.
-`POST /api/v1/interpret` accepts:
+`POST /api/v1/context/retrieve` accepts a prompt and returns bounded candidates
+and context sizing without calling a provider. `POST /api/v1/interpret` accepts a
+prompt and optional `interpreter` of `rules`,
+`llama` or an explicitly configured OpenAI-compatible provider.
 
 [source,json]
 ----
-{"prompt":"Show filling view for Tank 3", "interpreter":"rules"}
+{"prompt":"Show the status of the packaging line","interpreter":"rules"}
 ----
 
-`interpreter` is optional and accepts `rules`, `llama`, or `llama.cpp` when a
-loopback llama.cpp URL was configured. Rule interpretation is deterministic.
-A ready response contains `status`, `interpreter`, and a task. A ready task
-contains `kind`, `model_id`, `model_revision`, `original_request`, and an
-optional `anchor_asset_id`. The server validates task identity against the
-snapshotted active model and adds a canonical `view`.
+The server retrieves bounded context before provider inference. A ready response
+contains a validated task and canonical view. A clarification response contains a
+message and candidates and creates no view. A provider cannot select a tag address,
+invent an asset, or grant a permission. `execution` metadata includes candidate
+scope, context bytes, estimated tokens, truncation, retrieval and interpretation
+cache states, provider usage when returned, stage timings and validation evidence.
 
-An ambiguous, unsupported, or unknown request returns `status: clarification`
-with a message and optional candidates. Clarification does not create a view.
-
-`POST /api/v1/resolve` accepts `{"task":{...}}`. The task revision must match
-the active model revision; an optional task model ID must also match. The
-response is a canonical view with a server-generated `view_id`, `session_id`,
-and `context_generation`. The generated view retains the task, components,
-issues, dependencies, and dependency fingerprints.
-
-`POST /api/v1/reconcile` accepts either `{"view":{...}}` or
-`{"view_id":"..."}`. The server looks up the canonical view by ID. A full
-supplied view must exactly match the cached value. On success, the reconciled
-view preserves its `view_id`, updates the canonical cache entry, and includes
-the current session and generation.
-
-== Scenario and simulation mutations
-
-`POST /api/v1/scenario` accepts `{"id":"model-revision-added-feed"}`. The ID
-is validated and used as a file stem under the configured models directory.
-The new model is validated before activation. Activation resets `tick` and
-increments `context_generation`.
-
-`POST /api/v1/simulation` accepts `{"running":true}` or
-`{"running":false}`. This only pauses or resumes deterministic laboratory
-telemetry generation.
+`POST /api/v1/resolve` accepts a validated task and returns a server-owned view.
+`POST /api/v1/reconcile` accepts a cached `view_id` or exact cached view and
+revalidates it against the current model. Removed or semantically changed bindings
+become explicit issues; they are never silently rebound.
+`POST /api/v1/scenario` selects a reviewed model configuration and increments the
+context generation. Existing views and caches are then revalidated or invalidated.
 
 == Errors and limits
 
-Errors use `{ "error": { "code": "...", "message": "..." } }` and never
-include stack traces or credentials. Mutation bodies are limited to 64 KiB;
-JSON nesting is limited to depth 32; model files are limited to 1 MiB. Prompt
-requests are limited to 8192 bytes at the HTTP boundary and by the native rule
-interpreter. The optional llama.cpp request timeout is
-configurable from 100 to 30000 ms and defaults to 5000 ms.
+Errors use `{ "error": { "code": "...", "message": "..." } }` and never include
+stack traces, credentials or source secrets. Request bodies, JSON depth, model size,
+prompt length, telemetry values, event clients, provider concurrency and cache sizes
+are bounded by configuration and native validation.
 
-Relevant status mappings include:
+Relevant status mappings are:
 
-* `400` for malformed JSON, content, prompt, task, scenario, or simulation data;
-* `403` for an unsupported mutation origin;
-* `404` when a scenario file cannot be selected;
-* `409` for `stale_context` or a reconciliation `lost_update`;
-* `413` for an oversized request body;
-* `415` when a mutation lacks an application/json content type;
-* `422` for engine validation, `unknown_view`, or `view_tampered` errors;
-* `429` when inference or SSE concurrency limits are reached;
-* `502` for configured provider errors.
+* `400` for malformed JSON or invalid content;
+* `403` for an unsupported origin or policy;
+* `404` for an unknown route, model or view;
+* `409` for stale model generation or reconciliation conflict;
+* `413` for an oversized body;
+* `415` for a missing JSON content type on mutation;
+* `422` for model, task, binding or telemetry validation;
+* `429` for bounded concurrency or queue saturation;
+* `502` for an explicitly configured provider failure.
 
-The server binds to loopback unless `--allow-remote` is supplied. That option
-changes the bind policy only. The prototype has no production authentication.
+The default bind is loopback. `--allow-remote` changes binding only and does not
+provide production authentication. Remote provider use is opt-in, TLS-gated and
+requires a key from an environment variable. The browser receives no key.

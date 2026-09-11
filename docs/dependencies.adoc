@@ -1,0 +1,39 @@
+= Dependency inventory
+
+Date:: 2026-09-11
+Status:: Accepted dependencies only
+
+== Drogon 1.9.13
+
+Problem:: Cross-platform asynchronous HTTP server, client, filters, sessions and
+bounded streams.
+
+Pin:: Release commit `4c5430757ea5451a7c38fbbef4b4bef7dbb47f2f`, with Trantor
+commit `63a4e5e164e219dc3bf30cdbfa1462ae5602fa97` as recorded in ADR 0015.
+
+Licence:: MIT.
+
+Build:: ORM, database clients, YAML configuration, examples, tests and control
+tools are disabled. Drogon is not the application persistence layer.
+
+Removal:: Replace the HTTP and provider transport translation units while retaining
+the `/api/v1` contracts.
+
+== JsonCpp transitive dependency
+
+Drogon requires JsonCpp for framework internals. The application JSON contract uses
+the already accepted project JSON selection. JsonCpp is not used for model semantics;
+the resolved Drogon dependency revision must be recorded in each release build
+inventory.
+
+== Matplotlib 3.11.1, benchmark extra only
+
+Matplotlib is an optional Python dependency for raw benchmark visualization. It is
+not linked into the service, workbench or containers. Plots use the non-interactive
+Agg backend and never create measurements. See ADR 0010.
+
+== Explicitly excluded
+
+SQLite, open62541, LVGL, Qt runtime libraries, vendor SDKs, cloud agent frameworks
+and additional YAML parsers are not active dependencies. Vendor compatibility is a
+documented JSON boundary until a separately accepted adapter and evidence exist.

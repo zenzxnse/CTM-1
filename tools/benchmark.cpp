@@ -1,4 +1,5 @@
 #include "context_hmi/engine.hpp"
+#include "context_hmi/context_retrieval.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -29,8 +30,8 @@ struct Config {
     std::size_t trials = 7;
     std::size_t iterations = 100;
     std::size_t batch_size = 1;
-    std::string base_model = "examples/pump-station.json";
-    std::string revision_model = "examples/model-revision-added-feed.json";
+    std::string base_model = "examples/machines/assembly-line.json";
+    std::string revision_model = "examples/machines/assembly-line-revision-2.json";
 };
 
 struct Statistics {
@@ -249,24 +250,32 @@ Json cpu_availability() {
     return result;
 }
 
-} // namespace
+}  /* namespace */
 
 int main(int argc, char **argv) {
     try {
         const Config config = parse_args(argc, argv);
         const Json base_model = load_model(config.base_model);
         const Json revision_model = load_model(config.revision_model);
-        const std::string prompt = "Show filling view for Tank 3";
-        const Json interpretation = context_hmi::interpret_request(base_model, prompt);
-        if (interpretation.value("status", "") != "ready" || !interpretation.contains("task"))
-            throw std::runtime_error("base prompt did not produce a ready task");
-        const Json base_task = interpretation.at("task");
+        const std::string prompt = "Show the process temperature for the cure oven";
+        const Json retrieval = context_hmi::context::retrieve(base_model, prompt);
+        if (retrieval.value("requires_clarification", true) ||
+            retrieval.at("eligible_asset_ids").size() != 1)
+            throw std::runtime_error("base prompt did not retrieve one equipment scope");
+        const Json base_task{{"kind", "overview"},
+                             {"model_id", base_model.at("model_id")},
+                             {"model_revision", base_model.at("revision")},
+                             {"original_request", prompt},
+                             {"anchor_asset_id", retrieval.at("eligible_asset_ids").at(0)},
+                             {"measurement_roles", retrieval.at("measurement_role_hints")}};
         const Json previous_view = resolve_task(base_model, base_task);
         std::size_t benchmark_guard = 0;
 
-        const auto interpret_resolve_samples = measure(config, [&]() {
-            const Json current_interpretation = context_hmi::interpret_request(base_model, prompt);
-            const Json current_view = resolve_task(base_model, current_interpretation.at("task"));
+        const auto retrieve_resolve_samples = measure(config, [&]() {
+            const Json current_retrieval = context_hmi::context::retrieve(base_model, prompt);
+            Json current_task = base_task;
+            current_task["anchor_asset_id"] = current_retrieval.at("eligible_asset_ids").at(0);
+            const Json current_view = resolve_task(base_model, current_task);
             benchmark_guard = benchmark_guard ^ current_view.size();
         });
         const auto reconcile_samples = measure(config, [&]() {
@@ -278,7 +287,7 @@ int main(int argc, char **argv) {
         const auto revision_workload = workload_json(revision_model, config.revision_model);
         Json output{
             {"schema_version", 1},
-            {"benchmark", "context-hmi rule smoke baseline"},
+            {"benchmark", "context-hmi native context baseline"},
             {"date_utc", date_utc()},
             {"environment", Json{{"os", operating_system()},
                                  {"architecture", architecture()},
@@ -297,10 +306,11 @@ int main(int argc, char **argv) {
                               {"revision_model", revision_workload},
                               {"previous_view_status", previous_view.value("status", "")}}},
             {"metrics",
-             Json::array({metric_json("rule_interpret_resolve", "interpret_request + resolve_task",
-                                      interpret_resolve_samples, config),
+             Json::array({metric_json("retrieve_resolve", "context retrieval + resolve_task",
+                                      retrieve_resolve_samples, config),
                           metric_json("reconcile", "reconcile_view", reconcile_samples, config)})},
-            {"checks", Json{{"base_task_status", interpretation.value("status", "")},
+            {"checks", Json{{"retrieval_requires_clarification",
+                              retrieval.value("requires_clarification", true)},
                             {"base_view_status", previous_view.value("status", "")},
                             {"guard", benchmark_guard},
                             {"counts_as_product_comparison", false},

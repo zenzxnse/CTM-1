@@ -1,6 +1,6 @@
 = Project rules
 
-These are the user's general conventions applied to the C++ prototype and its workbench.
+These are the user's general conventions applied to the Context HMI service and its workbench.
 
 == Language and documentation
 
@@ -31,8 +31,8 @@ Do not invent ownership, machine connections, source addresses or replacement id
 Keep source references distinct from model asset IDs. Review a binding when its meaning
 changes. A generation provider never creates physical command authority.
 
-Keep mutable ownership explicit. Simulated state, current values and saved views are
-memory-only unless a future ADR defines persistence and recovery.
+Keep mutable ownership explicit. Current telemetry and views are memory-only unless
+the framed operational journal contract explicitly covers a required record.
 
 == Verification and measurement
 
@@ -51,4 +51,4 @@ Use short conventional commit subjects and preserve repository history in source
 Keep generated builds, node modules, local model weights, caches and runtime state out of Git.
 Use the repository's configured author identity. A source snapshot is not a production release.
 Verify a clean extracted copy and installed executable before calling the delivered
-prototype reproducible. Verify Windows separately before claiming Windows support.
+release reproducible. Verify Windows separately before claiming Windows support.

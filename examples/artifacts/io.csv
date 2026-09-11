@@ -1,0 +1,9 @@
+id,tag_id,signal_type,address,channel
+io-line-state,line-a.state,DI,PLC1:I.0,0
+io-line-throughput,line-a.throughput,AI,PLC1:AI.0,1
+io-conveyor-speed,conveyor-a1.speed,AI,PLC1:AI.1,2
+io-conveyor-load,conveyor-a1.load,AI,PLC1:AI.2,3
+io-oven-temperature,oven-a1.temperature,AI,PLC1:AI.3,4
+io-oven-setpoint,oven-a1.setpoint,AO,PLC1:AQ.0,5
+io-inspection-reject,inspection-a1.reject-rate,AI,PLC1:AI.4,6
+io-inspection-state,inspection-a1.state,DI,PLC1:I.1,7

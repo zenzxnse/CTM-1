@@ -88,7 +88,7 @@ establish a versioned external import, extension, or runtime API.
 * A Schneider integration cannot be planned as a guessed file import or
   undocumented runtime call. The exact product, version, target runtime, and
   licensed SDK must be identified first.
-* The native service retains the prototype boundary: loopback HTTP, simulation,
+* The native service retains the historical boundary: loopback HTTP, simulation,
   read-only external integration, and no production authentication claim.
 
 == Verification status

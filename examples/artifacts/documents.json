@@ -1,0 +1,14 @@
+[
+  {
+    "id": "line-a-operating-standard",
+    "title": "Assembly Line A operating standard",
+    "path": "documents/line-a-operating-standard.pdf",
+    "media_type": "application/pdf"
+  },
+  {
+    "id": "oven-a1-maintenance-sheet",
+    "title": "Cure Oven A1 maintenance sheet",
+    "path": "documents/oven-a1-maintenance-sheet.pdf",
+    "media_type": "application/pdf"
+  }
+]

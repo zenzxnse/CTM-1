@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_BINARY = ROOT / "build" / "debug" / "context-hmi-benchmark"
+DEFAULT_BINARY = ROOT / "build" / "linux-debug" / "context-hmi-benchmark"
 
 
 def arguments() -> argparse.Namespace:
@@ -19,11 +19,13 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--trials", type=int, default=7)
     parser.add_argument("--iterations", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=1)
-    parser.add_argument("--base-model", type=Path, default=Path("examples/pump-station.json"))
+    parser.add_argument(
+        "--base-model", type=Path, default=Path("examples/machines/assembly-line.json")
+    )
     parser.add_argument(
         "--revision-model",
         type=Path,
-        default=Path("examples/model-revision-added-feed.json"),
+        default=Path("examples/machines/assembly-line-revision-2.json"),
     )
     parser.add_argument(
         "--save",

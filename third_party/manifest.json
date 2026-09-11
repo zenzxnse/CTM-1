@@ -5,11 +5,6 @@
       "path": "nlohmann/json.hpp",
       "source": "https://raw.githubusercontent.com/nlohmann/json/v3.12.0/single_include/nlohmann/json.hpp",
       "sha256": "aaf127c04cb31c406e5b04a63f1ae89369fccde6d8fa7cdda1ed4f32dfc5de63"
-    },
-    {
-      "path": "httplib.h",
-      "source": "https://raw.githubusercontent.com/yhirose/cpp-httplib/v0.28.0/httplib.h",
-      "sha256": "9e5cafaa227dad5c10e837990a736cecaff03258f50d37067cedeee1dba5d344"
     }
   ]
 }
