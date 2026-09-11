@@ -186,6 +186,18 @@ if [[ "$healthy" != "1" ]]; then
   exit 1
 fi
 
+workbench_markup="$(curl --fail --silent "$service_url/")"
+if [[ "$workbench_markup" != *'http-equiv="content-security-policy"'* ]] ||
+  [[ "$workbench_markup" != *"sha256-"* ]]; then
+  printf 'The workbench is missing its hash-based content security policy.\n' >&2
+  exit 1
+fi
+workbench_headers="$(curl --fail --silent --dump-header - --output /dev/null "$service_url/")"
+if [[ "${workbench_headers,,}" == *"script-src"* ]]; then
+  printf 'The HTTP content security policy overrides the workbench script hash.\n' >&2
+  exit 1
+fi
+
 if [[ "$seed_telemetry" == "1" ]]; then
   context_generation="$(curl --fail --silent "$service_url/api/v1/model" | \
     python3 -c 'import json,sys; print(json.load(sys.stdin)["context_generation"])')"

@@ -256,11 +256,18 @@ void configure_framework(drogon::HttpAppFramework& app,
         response->addHeader("Referrer-Policy", "no-referrer");
         response->addHeader("Permissions-Policy",
                             "camera=(), geolocation=(), microphone=(self)");
-        response->addHeader(
-            "Content-Security-Policy",
-            "default-src 'self'; connect-src 'self'; img-src 'self' data:; "
-            "script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; "
-            "base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+        const auto& path = request->path();
+        if (path == "/" || path.ends_with(".html")) {
+          response->addHeader(
+              "Content-Security-Policy",
+              "frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+        } else {
+          response->addHeader(
+              "Content-Security-Policy",
+              "default-src 'self'; connect-src 'self'; img-src 'self' data:; "
+              "script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; "
+              "base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+        }
         response->addHeader("X-Request-ID", request_id(request));
       });
   app.setCustomErrorHandler([](drogon::HttpStatusCode status) {
